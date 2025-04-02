@@ -1,0 +1,84 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --foreground-rgb: 0, 0, 0;
+  --background-start-rgb: 255, 255, 255;
+  --background-end-rgb: 255, 255, 255;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --foreground-rgb: 255, 255, 255;
+    --background-start-rgb: 0, 0, 0;
+    --background-end-rgb: 0, 0, 0;
+  }
+}
+
+body {
+  color: rgb(var(--foreground-rgb));
+  background: rgb(var(--background-start-rgb));
+  font-family: var(--font-geist-sans);
+}
+
+/* Custom styles for the recipe website */
+.container {
+  max-width: 1280px;
+  margin: 0 auto;
+  padding: 0 1rem;
+}
+
+/* Use standard classes instead of @apply */
+.recipe-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 0.5rem;
+}
+
+.section-title {
+  font-size: 1.5rem;
+  font-weight: 700;
+  color: #1f2937;
+  margin-bottom: 1.5rem;
+}
+
+.btn-primary {
+  background-color: #f59e0b;
+  color: white;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  transition: background-color 0.2s;
+}
+.btn-primary:hover {
+  background-color: #d97706;
+}
+
+.btn-secondary {
+  background-color: white;
+  color: #1f2937;
+  font-weight: 500;
+  padding: 0.5rem 1rem;
+  border-radius: 0.25rem;
+  border: 1px solid #d1d5db;
+  transition: background-color 0.2s;
+}
+.btn-secondary:hover {
+  background-color: #f3f4f6;
+}
+
+/* Custom font classes */
+.font-handwriting {
+  font-family: var(--font-dancing-script);
+  font-weight: 600;
+  font-size: 1.5em;
+}
+
+/* Media queries for responsive text */
+@media (min-width: 768px) {
+  .recipe-title {
+    font-size: 1.875rem;
+  }
+}
