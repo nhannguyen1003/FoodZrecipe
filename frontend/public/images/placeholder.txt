@@ -1,0 +1,15 @@
+This folder needs real images to display properly. 
+
+For development, you can use placeholder images from:
+1. https://placeholder.com 
+2. https://picsum.photos
+3. Or create your own placeholders
+
+Required images:
+- /images/hero-bg.jpg (large background for hero section)
+- /images/featured/*.jpg (large images for featured section)
+- /images/categories/*.jpg (small icons for categories)
+- /images/recipes/*.jpg (medium images for recipe cards)
+- /images/authors/*.jpg (small avatars for authors)
+
+For a production site, replace these with optimized images. 
