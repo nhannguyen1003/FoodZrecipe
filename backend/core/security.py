@@ -1,4 +1,4 @@
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, UTC
 from typing import Any, Union, Optional, Dict
 from passlib.context import CryptContext
 from jose import jwt, JWTError
@@ -7,6 +7,7 @@ from fastapi.security import OAuth2PasswordBearer
 from sqlalchemy.orm import Session
 from config import settings
 from backend.models.user import UserRole
+from database.session import get_db
 
 # Create a PassLib context for password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
@@ -33,9 +34,9 @@ def create_access_token(*, data: Dict[str, Any], expires_delta: Optional[timedel
     to_encode = data.copy()
     
     if expires_delta:
-        expire = datetime.utcnow() + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.utcnow() + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
+        expire = datetime.now(UTC) + timedelta(minutes=settings.ACCESS_TOKEN_EXPIRE_MINUTES)
     
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, settings.SECRET_KEY, algorithm="HS256")
@@ -43,7 +44,7 @@ def create_access_token(*, data: Dict[str, Any], expires_delta: Optional[timedel
 
 async def get_current_user(
     token: str = Depends(oauth2_scheme), 
-    db: Session = Depends("database.session.get_db")
+    db: Session = Depends(get_db)
 ):
     """
     Decode JWT token and validate current user
