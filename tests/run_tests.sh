@@ -15,159 +15,142 @@ TEST_ROOT="$(dirname "$(realpath "$0")")"
 UNITTEST_DIR="$TEST_ROOT/unittest"
 INTEG_DIR="$TEST_ROOT/integ"
 
-# Define test categories and their associated patterns
-CONNECTION_PATTERN="*/test_db_connection.py"
-USER_PATTERN="*/test_user*.py"
-SEARCH_PATTERN="*/test_search*.py"
-REPO_PATTERN="*/test_repository*.py"
-SEED_PATTERN="*/test_seed*.py"
-CATEGORY_PATTERN="test_category*.py"
-
-# Function to find test files based on patterns
-find_test_files() {
-    local search_dir="$1"
-    local patterns="$2"
-    local results=""
-    
-    for pattern in $patterns; do
-        # Check if pattern contains path separators
-        if [[ "$pattern" == */* ]]; then
-            # Pattern already includes path - use it as is from TEST_ROOT
-            local files=$(find "$TEST_ROOT" -path "*$pattern" 2>/dev/null)
-        else
-            # Simple pattern - search in specified directory
-            local files=$(find "$search_dir" -name "$pattern" 2>/dev/null)
-        fi
-        
-        # Add to results if any files found
-        if [[ -n "$files" ]]; then
-            if [[ -n "$results" ]]; then
-                results="$results $files"
-            else
-                results="$files"
-            fi
-        fi
-    done
-    
-    echo "$results"
+# Function to get test files matching a pattern
+get_files() {
+    local dir="$1"
+    local pattern="$2"
+    find "$dir" -name "$pattern" 2>/dev/null
 }
 
-# Function to find test files across all test directories
-find_test_files_all_dirs() {
-    local patterns="$1"
-    local results=""
-    
-    # Search in all test directories for the pattern
-    for dir in "$UNITTEST_DIR" "$INTEG_DIR" "$CATEGORY_DIR"; do
-        local files=$(find_test_files "$dir" "$patterns")
-        if [[ -n "$files" ]]; then
-            if [[ -n "$results" ]]; then
-                results="$results $files"
-            else
-                results="$files"
-            fi
-        fi
-    done
-    
-    echo "$results"
+# Get test files for each category
+get_connection_tests() {
+    get_files "$UNITTEST_DIR" "test_db_connection.py"
 }
 
-# Build the test file lists based on patterns
-CONNECTION_TESTS=$(find_test_files "$UNITTEST_DIR" "$CONNECTION_PATTERN")
-USER_TESTS=$(find_test_files "$UNITTEST_DIR" "$USER_PATTERN")
-SEARCH_TESTS=$(find_test_files "$UNITTEST_DIR" "$SEARCH_PATTERN")
-REPO_TESTS=$(find_test_files_all_dirs "$REPO_PATTERN")
-SEED_TESTS=$(find_test_files "$UNITTEST_DIR" "$SEED_PATTERN")
-INTEG_TESTS=$(find_test_files "$INTEG_DIR" "$INTEG_PATTERN")
-CATEGORY_TESTS=$(find_test_files "$CATEGORY_DIR" "$CATEGORY_PATTERN")
+get_user_tests() {
+    get_files "$UNITTEST_DIR" "test_user*.py"
+}
 
-# Combine all test files
-ALL_TESTS="$CONNECTION_TESTS $USER_TESTS $SEARCH_TESTS $REPO_TESTS $SEED_TESTS $INTEG_TESTS $CATEGORY_TESTS"
+get_search_tests() {
+    get_files "$TEST_ROOT" "test_search*.py"
+}
 
-# List of all categories (excluding "all")
-CATEGORIES=("connection" "user" "search" "repo" "seed" "integ" "category")
+get_repo_tests() {
+    get_files "$TEST_ROOT" "test_repository.py"
+}
+
+get_seed_tests() {
+    get_files "$UNITTEST_DIR" "test_seed*.py"
+}
+
+get_category_tests() {
+    get_files "$TEST_ROOT" "test_category*.py"
+}
+
+get_all_tests() {
+    get_connection_tests
+    get_user_tests
+    get_search_tests
+    get_repo_tests
+    get_seed_tests
+    get_category_tests
+}
+
+# Show available test categories
+show_category_tests() {
+    local category="$1"
+    local tests
+    
+    echo -e "  - ${YELLOW}${category}:${NC}"
+    
+    case "$category" in
+        "connection") tests=$(get_connection_tests) ;;
+        "user") tests=$(get_user_tests) ;;
+        "search") tests=$(get_search_tests) ;;
+        "repo") tests=$(get_repo_tests) ;;
+        "seed") tests=$(get_seed_tests) ;;
+        "category") tests=$(get_category_tests) ;;
+        *) tests="" ;;
+    esac
+    
+    if [[ -z "$tests" ]]; then
+        echo -e "      (no tests found)"
+    else
+        while IFS= read -r file; do
+            echo -e "      $(basename "$file")"
+        done <<< "$tests"
+    fi
+}
 
 show_categories() {
     echo -e "${BLUE}Available test categories:${NC}"
     
-    echo -e "  - ${YELLOW}connection:${NC}"
-    for file in $CONNECTION_TESTS; do
-        echo -e "      $(basename "$file")"
-    done
-    
-    echo -e "  - ${YELLOW}user:${NC}"
-    for file in $USER_TESTS; do
-        echo -e "      $(basename "$file")"
-    done
-    
-    echo -e "  - ${YELLOW}search:${NC}"
-    for file in $SEARCH_TESTS; do
-        echo -e "      $(basename "$file")"
-    done
-    
-    echo -e "  - ${YELLOW}repo:${NC}"
-    for file in $REPO_TESTS; do
-        echo -e "      $(basename "$file")"
-    done
-    
-    echo -e "  - ${YELLOW}seed:${NC}"
-    for file in $SEED_TESTS; do
-        echo -e "      $(basename "$file")"
-    done
-    
-    echo -e "  - ${YELLOW}integ:${NC}"
-    for file in $INTEG_TESTS; do
-        echo -e "      $(basename "$file")"
-    done
-    
-    echo -e "  - ${YELLOW}category:${NC}"
-    for file in $CATEGORY_TESTS; do
-        echo -e "      $(basename "$file")"
-    done
+    show_category_tests "connection"
+    show_category_tests "user"
+    show_category_tests "search" 
+    show_category_tests "repo"
+    show_category_tests "seed"
+    show_category_tests "category"
     
     echo -e "  - ${YELLOW}all:${NC} (all tests from categories above)"
 }
 
-get_tests_for_category() {
-    local category=$1
+# Run tests for a specific category
+run_tests() {
+    local category="$1"
+    local test_files
     
     case "$category" in
-        "connection") echo "$CONNECTION_TESTS" ;;
-        "user") echo "$USER_TESTS" ;;
-        "search") echo "$SEARCH_TESTS" ;;
-        "repo") echo "$REPO_TESTS" ;;
-        "seed") echo "$SEED_TESTS" ;;
-        "integ") echo "$INTEG_TESTS" ;;
-        "category") echo "$CATEGORY_TESTS" ;;
-        "all") echo "$ALL_TESTS" ;;
-        *) echo "" ;;
+        "connection") test_files=$(get_connection_tests) ;;
+        "user") test_files=$(get_user_tests) ;;
+        "search") test_files=$(get_search_tests) ;;
+        "repo") test_files=$(get_repo_tests) ;;
+        "seed") test_files=$(get_seed_tests) ;;
+        "category") test_files=$(get_category_tests) ;;
+        "all") test_files=$(get_all_tests) ;;
+        *) test_files="" ;;
     esac
-}
-
-run_tests() {
-    local category=$1
-    local files=$(get_tests_for_category "$category")
     
-    # Check if it's a valid category
-    if [[ -z "$files" ]]; then
-        echo -e "${RED}Error: Unknown test category '$category'${NC}"
+    # Check if category exists and has tests
+    if [[ -z "$test_files" ]]; then
+        echo -e "${RED}Error: Unknown test category '$category' or no tests found${NC}"
         show_categories
         exit 1
     fi
     
-    # Display the category and files
+    # Display category and test files
     echo -e "${BLUE}========== Running Tests: $category ==========${NC}"
     echo -e "${YELLOW}Test files:${NC}"
-    for file in $files; do
-        echo "  - $(basename "$file")"
-    done
+    
+    # Create a temporary file for the Python test script with properly quoted paths
+    local temp_file=$(mktemp)
+    echo "import pytest" > "$temp_file"
+    echo "import sys" >> "$temp_file"
+    echo "test_files = [" >> "$temp_file"
+    
+    # Process each file separately
+    while IFS= read -r file; do
+        if [[ -n "$file" ]]; then
+            echo "  - $(basename "$file")"
+            # Add properly quoted path to test_files array in Python script
+            echo "    r'$file'," >> "$temp_file"
+        fi
+    done <<< "$test_files"
+    
+    echo "]" >> "$temp_file"
+    echo "sys.exit(pytest.main(test_files + ['-v']))" >> "$temp_file"
     echo
     
-    # Run the tests
-    python -m pytest $files -v
+    # Run the tests using the Python script which has properly quoted paths
+    echo "Running tests for $category..."
+    python "$temp_file"
     
-    # Check exit status
-    if [ $? -eq 0 ]; then
+    # Store the result and clean up
+    local result=$?
+    rm -f "$temp_file"
+    
+    # Check result
+    if [ $result -eq 0 ]; then
         echo -e "\n${GREEN}✓ All tests in category '$category' passed!${NC}"
         return 0
     else
@@ -176,46 +159,66 @@ run_tests() {
     fi
 }
 
+# Run all categories
 run_all_categories() {
-    local overall_exit_code=0
+    local all_categories=("connection" "user" "search" "repo" "seed" "category")
+    local overall_result=0
     
     echo -e "${BLUE}========== Running All Test Categories ==========${NC}"
     
-    # Loop through all categories except "all" to avoid duplication
-    for category in "${CATEGORIES[@]}"; do
+    for category in "${all_categories[@]}"; do
+        local test_files
+        
+        case "$category" in
+            "connection") test_files=$(get_connection_tests) ;;
+            "user") test_files=$(get_user_tests) ;;
+            "search") test_files=$(get_search_tests) ;;
+            "repo") test_files=$(get_repo_tests) ;;
+            "seed") test_files=$(get_seed_tests) ;;
+            "category") test_files=$(get_category_tests) ;;
+            *) test_files="" ;;
+        esac
+        
+        # Skip empty categories
+        if [[ -z "$test_files" ]]; then
+            echo -e "\n${YELLOW}========================================${NC}"
+            echo -e "${BLUE}Skipping empty category: $category${NC}"
+            continue
+        fi
+        
         echo -e "\n${YELLOW}========================================${NC}"
         run_tests "$category"
         
-        # Track exit code but continue running all categories
+        # Track overall result
         if [ $? -ne 0 ]; then
-            overall_exit_code=1
+            overall_result=1
         fi
     done
     
     echo -e "\n${BLUE}========== All Test Categories Complete ==========${NC}"
     
-    if [ $overall_exit_code -eq 0 ]; then
+    if [ $overall_result -eq 0 ]; then
         echo -e "${GREEN}All test categories passed successfully!${NC}"
     else
         echo -e "${RED}Some test categories failed. See above for details.${NC}"
     fi
     
-    return $overall_exit_code
+    return $overall_result
 }
 
 # Main script execution
 if [[ $# -eq 0 ]]; then
-    # No arguments provided, run all categories
+    # No arguments, run all categories
     run_all_categories
     exit $?
 fi
 
-# If the argument is 'list', just show the categories
+# Check for 'list' command
 if [[ "$1" == "list" ]]; then
     show_categories
     exit 0
 fi
 
-# Run the tests for the specified category
+# Run specified category
 run_tests "$1"
 exit $? 

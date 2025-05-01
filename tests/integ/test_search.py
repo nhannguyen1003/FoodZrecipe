@@ -1,8 +1,42 @@
 import pytest
 from fastapi.testclient import TestClient
+from sqlalchemy import text
 from main import app
+from database.session import Base, engine
 
 client = TestClient(app)
+
+@pytest.fixture(autouse=True, scope="module")
+def setup_test_db():
+    """Ensure all tables including categories are created before tests run"""
+    # Create all tables
+    Base.metadata.create_all(bind=engine)
+    
+    # Verify categories table exists
+    with engine.connect() as conn:
+        try:
+            conn.execute(text("SELECT * FROM categories LIMIT 1"))
+        except Exception:
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS categories (
+                    id SERIAL PRIMARY KEY,
+                    name VARCHAR(50) NOT NULL UNIQUE,
+                    description TEXT,
+                    created_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP,
+                    updated_at TIMESTAMP WITH TIME ZONE DEFAULT CURRENT_TIMESTAMP
+                )
+            """))
+            conn.execute(text("""
+                CREATE TABLE IF NOT EXISTS recipe_category (
+                    recipe_id INTEGER REFERENCES recipes(id) ON DELETE CASCADE,
+                    category_id INTEGER REFERENCES categories(id) ON DELETE CASCADE,
+                    PRIMARY KEY (recipe_id, category_id)
+                )
+            """))
+            conn.commit()
+    
+    yield
+    # No need to drop tables after tests as we're using a test schema
 
 def test_text_search_with_filtering():
     """Test the text search endpoint with category filtering"""

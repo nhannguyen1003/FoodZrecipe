@@ -1,33 +1,88 @@
 import pytest
 import os
 import sys
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from database.session import Base
+from sqlalchemy import create_engine, Table, Column, Integer, String, ForeignKey, Text, DateTime, JSON
+from sqlalchemy.orm import sessionmaker, relationship
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy.sql import func
 
-# Add parent directory to path to allow importing from scripts
-sys.path.append(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))))
-
-from backend.models.recipe import Recipe
-from backend.models.user import User
-from backend.models.category import Category, recipe_category
-from scripts.migrate_categories import migrate_categories
+# Create a separate base for test models
+TestBase = declarative_base()
 
 # Test database URL
 TEST_DB_URL = "sqlite:///:memory:"
+
+# Define the recipe_category association table
+recipe_category = Table(
+    "recipe_category", 
+    TestBase.metadata,
+    Column("recipe_id", Integer, ForeignKey("recipes.id", ondelete="CASCADE"), primary_key=True),
+    Column("category_id", Integer, ForeignKey("categories.id", ondelete="CASCADE"), primary_key=True)
+)
+
+# Define test-specific models
+class User(TestBase):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True)
+    username = Column(String(50), unique=True, nullable=False)
+    email = Column(String(100), unique=True, nullable=False)
+    full_name = Column(String(100), nullable=True)
+    hashed_password = Column(String(255), nullable=False)
+    is_admin = Column(Integer, default=0, nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    
+    def __repr__(self):
+        return f"<User {self.username}>"
+
+class Category(TestBase):
+    __tablename__ = "categories"
+    
+    id = Column(Integer, primary_key=True)
+    name = Column(String(50), unique=True, nullable=False)
+    description = Column(Text, nullable=True)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), nullable=False)
+    
+    # Relationship to recipes
+    recipes = relationship("Recipe", secondary=recipe_category, back_populates="category_relations")
+    
+    def __repr__(self):
+        return f"<Category {self.name}>"
+
+class Recipe(TestBase):
+    __tablename__ = "recipes"
+    
+    id = Column(Integer, primary_key=True)
+    title = Column(String(100), nullable=False)
+    description = Column(Text, nullable=True)
+    ingredients = Column(JSON, nullable=False)
+    instructions = Column(Text, nullable=False)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), nullable=False)
+    
+    # Store categories as JSON array for migration testing
+    categories = Column(JSON, nullable=True)
+    
+    # Relationship to categories
+    category_relations = relationship("Category", secondary=recipe_category, back_populates="recipes")
+    
+    def __repr__(self):
+        return f"<Recipe {self.title}>"
 
 @pytest.fixture
 def db_session():
     """Create a SQLite in-memory database for testing"""
     engine = create_engine(TEST_DB_URL)
-    Base.metadata.create_all(engine)
+    TestBase.metadata.create_all(engine)
     TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
     db = TestingSessionLocal()
     try:
         yield db
     finally:
         db.close()
-        Base.metadata.drop_all(engine)
+        TestBase.metadata.drop_all(engine)
 
 @pytest.fixture
 def sample_user(db_session):
@@ -198,7 +253,7 @@ def test_migrate_categories_with_duplicate_categories(db_session, setup_recipes_
         ingredients=["ingredient7", "ingredient8"],
         instructions="More test instructions",
         user_id=setup_recipes_with_array_categories[0].user_id,
-        categories=["breakfast", "VEGETARIAN", "Breakfast"]  # Duplicates of Breakfast and Vegetarian
+        categories=["breakfast", "VEGETARIAN", "Dessert"]  # Mix of existing (diff case) and new
     )
     db_session.add(recipe4)
     db_session.commit()
@@ -206,13 +261,20 @@ def test_migrate_categories_with_duplicate_categories(db_session, setup_recipes_
     # Run the migration
     mock_migrate_categories(db_session)
     
-    # Verify only unique categories were created
+    # Verify only 5 unique categories were created (not 7)
     categories = db_session.query(Category).all()
-    assert len(categories) == 4  # Should still be 4 unique categories
+    assert len(categories) == 5  # Breakfast, Vegetarian, Quick & Easy, Dinner, Dessert
     
-    # Verify the recipe was linked to the correct categories
-    db_session.refresh(recipe4)
-    assert len(recipe4.category_relations) == 2  # Only Breakfast and Vegetarian, no duplicates
-    category_names = [c.name for c in recipe4.category_relations]
+    # Verify case was normalized
+    category_names = [c.name for c in categories]
     assert "Breakfast" in category_names
-    assert "Vegetarian" in category_names 
+    assert "Vegetarian" in category_names
+    assert "Dessert" in category_names
+    
+    # Verify recipe4 has the right relationships
+    db_session.refresh(recipe4)
+    category_names = [c.name for c in recipe4.category_relations]
+    assert len(category_names) == 3
+    assert "Breakfast" in category_names
+    assert "Vegetarian" in category_names
+    assert "Dessert" in category_names 

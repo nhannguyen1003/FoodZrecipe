@@ -5,7 +5,7 @@ from typing import List
 from backend.models.recipe import Recipe
 from tests.unittest.test_models import TestRecipe
 from database.repositories.recipe_repository import recipe_repository
-from tests.unittest.test_recipe_lsh import TestRecipeRepository
+from tests.unittest.test_search_recipe_lsh import TestRecipeRepository
 
 @pytest.fixture
 def test_db(db_session):
