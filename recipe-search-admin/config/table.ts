@@ -1,2 +1,0 @@
-export const PAGE_TABLE_SIZE_DEFAULT = 10;
-export const PAGE_TABLE_SIZE_OPTIONS = [10, 25, 50, 100];
