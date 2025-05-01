@@ -12,8 +12,4 @@ echo "=== Initializing Recipe Data ==="
 echo "Downloading raw data from Kaggle..."
 python3 "$SCRIPT_DIR/get_data_from_kaggle.py"
 
-# Step 2: Transform the raw data
-echo "Transforming raw data..."
-python3 "$SCRIPT_DIR/get_transformed_data.py"
 
-echo "=== Data initialization complete! ==="
