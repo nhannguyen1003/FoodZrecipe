@@ -278,11 +278,20 @@ def get_my_recipes(
 @router.get("/search", response_model=List[RecipeResponse])
 def search_recipes(
     query: str,
+    categories: Optional[List[str]] = Query(None, description="Filter by categories"),
+    sort_by: Optional[str] = Query("relevance", description="Sort options: relevance, newest, popular"),
     skip: int = 0,
     limit: int = 20,
     db: Session = Depends(get_db)
 ):
     """
-    Search recipes by text query
+    Search recipes by text query with filtering and sorting options
     """
-    return recipe_repository.search_by_text(db, query=query, skip=skip, limit=limit)
+    return recipe_repository.advanced_search(
+        db, 
+        query=query,
+        categories=categories,
+        sort_by=sort_by,
+        skip=skip,
+        limit=limit
+    )

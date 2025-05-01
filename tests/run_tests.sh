@@ -10,19 +10,83 @@ NC='\033[0m' # No Color
 # Add project root to PYTHONPATH
 export PYTHONPATH="$(dirname "$(dirname "$(realpath "$0")")")":$PYTHONPATH
 
-# Define test categories and their associated files
-# Using simple variables instead of associative arrays for compatibility
-CONNECTION_TESTS="tests/unittest/test_db_connection.py"
-USER_TESTS="tests/unittest/test_user_model.py tests/unittest/test_auth.py tests/unittest/test_recipe_cascade.py tests/unittest/test_user_repository.py"
-SEARCH_TESTS="tests/unittest/test_recipe_lsh.py tests/unittest/test_search.py tests/unittest/test_recipe.py"
-REPO_TESTS="tests/unittest/test_repository.py"
-SEED_TESTS="tests/unittest/test_seed_db.py tests/unittest/test_recipe_data.py tests/unittest/test_recipe_quality.py"
-INTEG_TESTS="tests/integ/test_auth_api.py "
-# ALL_TESTS is a combination of all other test categories
-ALL_TESTS="$CONNECTION_TESTS $USER_TESTS $SEARCH_TESTS $REPO_TESTS $SEED_TESTS"
+# Define test directories
+TEST_ROOT="$(dirname "$(realpath "$0")")"
+UNITTEST_DIR="$TEST_ROOT/unittest"
+INTEG_DIR="$TEST_ROOT/integ"
+
+# Define test categories and their associated patterns
+CONNECTION_PATTERN="test_db_connection.py"
+USER_PATTERN="test_user*.py test_auth*.py test_recipe_cascade*.py"
+SEARCH_PATTERN="test_recipe_lsh*.py test_search*.py test_recipe*.py"
+REPO_PATTERN="test_repository*.py"
+SEED_PATTERN="test_seed*.py test_recipe_data*.py test_recipe_quality*.py"
+INTEG_PATTERN="test_*.py"
+CATEGORY_PATTERN="test_category*.py"
+
+# Function to find test files based on patterns
+find_test_files() {
+    local search_dir="$1"
+    local patterns="$2"
+    local results=""
+    
+    for pattern in $patterns; do
+        # Check if pattern contains path separators
+        if [[ "$pattern" == */* ]]; then
+            # Pattern already includes path - use it as is from TEST_ROOT
+            local files=$(find "$TEST_ROOT" -path "*$pattern" 2>/dev/null)
+        else
+            # Simple pattern - search in specified directory
+            local files=$(find "$search_dir" -name "$pattern" 2>/dev/null)
+        fi
+        
+        # Add to results if any files found
+        if [[ -n "$files" ]]; then
+            if [[ -n "$results" ]]; then
+                results="$results $files"
+            else
+                results="$files"
+            fi
+        fi
+    done
+    
+    echo "$results"
+}
+
+# Function to find test files across all test directories
+find_test_files_all_dirs() {
+    local patterns="$1"
+    local results=""
+    
+    # Search in all test directories for the pattern
+    for dir in "$UNITTEST_DIR" "$INTEG_DIR" "$CATEGORY_DIR"; do
+        local files=$(find_test_files "$dir" "$patterns")
+        if [[ -n "$files" ]]; then
+            if [[ -n "$results" ]]; then
+                results="$results $files"
+            else
+                results="$files"
+            fi
+        fi
+    done
+    
+    echo "$results"
+}
+
+# Build the test file lists based on patterns
+CONNECTION_TESTS=$(find_test_files "$UNITTEST_DIR" "$CONNECTION_PATTERN")
+USER_TESTS=$(find_test_files "$UNITTEST_DIR" "$USER_PATTERN")
+SEARCH_TESTS=$(find_test_files "$UNITTEST_DIR" "$SEARCH_PATTERN")
+REPO_TESTS=$(find_test_files_all_dirs "$REPO_PATTERN")
+SEED_TESTS=$(find_test_files "$UNITTEST_DIR" "$SEED_PATTERN")
+INTEG_TESTS=$(find_test_files "$INTEG_DIR" "$INTEG_PATTERN")
+CATEGORY_TESTS=$(find_test_files "$CATEGORY_DIR" "$CATEGORY_PATTERN")
+
+# Combine all test files
+ALL_TESTS="$CONNECTION_TESTS $USER_TESTS $SEARCH_TESTS $REPO_TESTS $SEED_TESTS $INTEG_TESTS $CATEGORY_TESTS"
 
 # List of all categories (excluding "all")
-CATEGORIES=("connection" "user" "search" "repo" "seed" "integ")
+CATEGORIES=("connection" "user" "search" "repo" "seed" "integ" "category")
 
 show_categories() {
     echo -e "${BLUE}Available test categories:${NC}"
@@ -52,10 +116,17 @@ show_categories() {
         echo -e "      $(basename "$file")"
     done
     
-    echo -e "  - ${YELLOW}all:${NC}"
-    for file in $ALL_TESTS; do
+    echo -e "  - ${YELLOW}integ:${NC}"
+    for file in $INTEG_TESTS; do
         echo -e "      $(basename "$file")"
     done
+    
+    echo -e "  - ${YELLOW}category:${NC}"
+    for file in $CATEGORY_TESTS; do
+        echo -e "      $(basename "$file")"
+    done
+    
+    echo -e "  - ${YELLOW}all:${NC} (all tests from categories above)"
 }
 
 get_tests_for_category() {
@@ -68,6 +139,7 @@ get_tests_for_category() {
         "repo") echo "$REPO_TESTS" ;;
         "seed") echo "$SEED_TESTS" ;;
         "integ") echo "$INTEG_TESTS" ;;
+        "category") echo "$CATEGORY_TESTS" ;;
         "all") echo "$ALL_TESTS" ;;
         *) echo "" ;;
     esac

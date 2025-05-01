@@ -4,6 +4,7 @@ from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY, JSONB
 from database.session import Base
+from backend.models.category import recipe_category
 
 class Recipe(Base):
     __tablename__ = "recipes"
@@ -16,7 +17,7 @@ class Recipe(Base):
     instructions = Column(Text, nullable=False)  # Changed from ARRAY to Text to support the single block format
     image_url = Column(String(255), nullable=True)
     image_name = Column(String(255), nullable=True)  # Added to support Image_Name field
-    categories = Column(ARRAY(String), nullable=True)  # Maps to labels in sample data
+    categories = Column(ARRAY(String), nullable=True)  # Legacy field for backward compatibility
     labels = Column(ARRAY(String), nullable=True)  # Added explicit labels field for clarity
     prompt = Column(Text, nullable=True)  # Added to support prompt field
     prep_time = Column(Integer, nullable=True)  # minutes
@@ -28,6 +29,9 @@ class Recipe(Base):
     
     # Relationship to user with back reference
     user = relationship("User", back_populates="recipes")
+    
+    # Relationship to categories through the association table
+    category_relations = relationship("Category", secondary=recipe_category, back_populates="recipes")
     
     # LSH-related fields for text-based search
     text_feature_vector = Column(PG_ARRAY(Float), nullable=True)
