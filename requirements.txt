@@ -5,6 +5,7 @@ uvicorn>=0.21.1
 # Database
 sqlalchemy>=2.0.0
 psycopg2-binary>=2.9.5
+sqlalchemy-utils>=0.41.0
 
 # Authentication and security
 python-jose>=3.3.0
@@ -21,4 +22,9 @@ email-validator>=2.0.0
 # LSH implementation
 numpy>=1.24.0
 scikit-learn>=1.2.2
-pillow>=9.4.0 
+pillow>=9.4.0
+faiss-cpu>=1.7.4  # Facebook's efficient similarity search
+
+# Testing
+pytest>=7.3.1
+pytest-cov>=4.1.0 

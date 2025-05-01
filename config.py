@@ -27,15 +27,23 @@ class Settings(BaseSettings):
     API_PREFIX: str = "/api/v1"
     DEBUG: bool = True
     
-    # LSH parameters
+    # File upload settings
+    UPLOAD_DIR: str = os.path.join(os.getcwd(), "data", "uploads")
+    
+    # LSH parameters - Original names (for backwards compatibility with tests)
     LSH_HASH_SIZE: int = 8
     LSH_NUM_TABLES: int = 10
+    
+    # FAISS LSH parameters (used by the application)
+    LSH_VECTOR_DIM: int = 128   # Dimensionality of feature vectors
+    LSH_HASH_BITS: int = 32     # Number of bits for LSH hashing
     
     # Model config
     model_config = SettingsConfigDict(
         env_file=".env",
         env_file_encoding="utf-8",
         case_sensitive=True,
+        extra="allow",  # Allow extra fields to avoid validation errors
     )
 
 # Create settings instance
