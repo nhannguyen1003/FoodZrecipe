@@ -2,12 +2,22 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from config import settings
+from contextlib import asynccontextmanager
 
 from backend.api import auth, recipe, search, admin
 from backend.core.startup import init_app
 
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # Initialize LSH indices and other startup tasks
+    init_app()
+    yield
+
 # Create FastAPI app
-app = FastAPI(title="Food Recipe App with LSH Search")
+app = FastAPI(
+    title="Food Recipe App with LSH Search",
+    lifespan=lifespan
+)
 
 # Set up CORS
 app.add_middleware(
@@ -23,14 +33,6 @@ app.include_router(auth.router, prefix=f"{settings.API_PREFIX}/auth", tags=["aut
 app.include_router(recipe.router, prefix=f"{settings.API_PREFIX}/recipes", tags=["recipes"])
 app.include_router(search.router, prefix=f"{settings.API_PREFIX}/search", tags=["search"])
 app.include_router(admin.router, prefix=f"{settings.API_PREFIX}/admin", tags=["admin"])
-
-@app.on_event("startup")
-def startup_event():
-    """
-    Initialize application on startup
-    """
-    # Initialize LSH indices and other startup tasks
-    init_app()
 
 @app.get("/")
 def root():

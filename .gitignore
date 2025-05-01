@@ -58,7 +58,7 @@ ehthumbs.db
 Thumbs.db
 
 #exclude data
-data/archive/
+data/db/Food Images/
 .venv/
 
 # Python cache files
