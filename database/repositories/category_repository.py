@@ -4,10 +4,12 @@ from typing import List, Optional, Dict, Any, Tuple
 from database.repositories.base_repository import BaseRepository
 from backend.models.category import Category
 from backend.models.recipe import Recipe, recipe_category
+from backend.schemas.category import CategoryCreate, CategoryUpdate
 
-class CategoryRepository(BaseRepository[Category]):
+class CategoryRepository(BaseRepository[Category, CategoryCreate, CategoryUpdate]):
     def __init__(self, db: Session):
-        super().__init__(db, Category)
+        super().__init__(Category)
+        self.db = db
     
     def get_by_name(self, name: str) -> Optional[Category]:
         """Get a category by name"""

@@ -11,7 +11,7 @@ from backend.schemas.category import (
     CategoryWithRecipesResponse
 )
 from backend.schemas.recipe import RecipeResponse
-from backend.core.auth import get_current_user, get_current_admin_user
+from backend.core.security import get_current_user, get_current_admin_user
 
 # Initialize the category router
 router = APIRouter(

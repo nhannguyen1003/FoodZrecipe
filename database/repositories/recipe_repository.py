@@ -13,7 +13,8 @@ from backend.models.category import Category
 
 class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
     def __init__(self, db: Session):
-        super().__init__(db, Recipe)
+        super().__init__(Recipe)
+        self.db = db
         self.text_index = None
         self.image_index = None
         self.recipe_ids = []  # To maintain mapping between FAISS indices and recipe IDs
@@ -540,4 +541,5 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         
         return recipes, total_count
 
-recipe_repository = RecipeRepository(Recipe) 
+# Create an instance with just the model
+recipe_repository = RecipeRepository(None)  # Pass None for db, it will be provided at runtime 
