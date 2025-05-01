@@ -3,7 +3,7 @@ from typing import Optional, List, Any, Dict
 from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
-from backend.models.user import User
+from backend.models.user import User, UserRole
 from backend.schemas.user import UserCreate, UserUpdate
 from backend.core.security import get_password_hash, verify_password
 from database.repositories.base_repository import BaseRepository
@@ -19,10 +19,13 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         return db.query(User).filter(User.is_active == True).offset(skip).limit(limit).all()
     
     def create(self, db: Session, *, obj_in: UserCreate) -> User:
+        # Implement password hashing in create method
+        hashed_password = get_password_hash(obj_in.password)
+        
         db_obj = User(
             email=obj_in.email,
             username=obj_in.username,
-            hashed_password=get_password_hash(obj_in.password),
+            hashed_password=hashed_password,
             role=obj_in.role,
             is_active=True,
             created_at=datetime.utcnow()
@@ -47,10 +50,18 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         return super().update(db, db_obj=db_obj, obj_in=update_data)
     
     def authenticate(self, db: Session, *, username: str, password: str) -> Optional[User]:
+        # Complete authentication method with secure password verification
         user = self.get_by_username(db, username=username)
-        if not user or not verify_password(password, user.hashed_password):
+        if not user:
             return None
         
+        if not verify_password(password, user.hashed_password):
+            return None
+        
+        # Only authenticate active users
+        if not user.is_active:
+            return None
+            
         # Update last login timestamp
         user.last_login = datetime.utcnow()
         db.commit()
@@ -61,6 +72,47 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         return user.is_active
     
     def is_admin(self, user: User) -> bool:
-        return user.role == "admin"
+        return user.role == UserRole.ADMIN
+    
+    # Add role-based query methods
+    def get_users_by_role(self, db: Session, *, role: UserRole, skip: int = 0, limit: int = 100) -> List[User]:
+        return db.query(User).filter(User.role == role).offset(skip).limit(limit).all()
+    
+    def count_users_by_role(self, db: Session, *, role: UserRole) -> int:
+        return db.query(User).filter(User.role == role).count()
+    
+    # Implement account status management
+    def activate_user(self, db: Session, *, user_id: int) -> Optional[User]:
+        user = self.get(db, id=user_id)
+        if not user:
+            return None
+        
+        user.is_active = True
+        user.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        return user
+    
+    def deactivate_user(self, db: Session, *, user_id: int) -> Optional[User]:
+        user = self.get(db, id=user_id)
+        if not user:
+            return None
+        
+        user.is_active = False
+        user.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        return user
+    
+    def change_user_role(self, db: Session, *, user_id: int, new_role: UserRole) -> Optional[User]:
+        user = self.get(db, id=user_id)
+        if not user:
+            return None
+        
+        user.role = new_role
+        user.updated_at = datetime.utcnow()
+        db.commit()
+        db.refresh(user)
+        return user
 
 user_repository = UserRepository(User)

@@ -13,7 +13,7 @@ export PYTHONPATH="$(dirname "$(dirname "$(realpath "$0")")")":$PYTHONPATH
 # Define test categories and their associated files
 # Using simple variables instead of associative arrays for compatibility
 CONNECTION_TESTS="tests/test_db_connection.py"
-USER_TESTS="tests/test_user_model.py tests/test_auth.py tests/test_recipe_cascade.py"
+USER_TESTS="tests/test_user_model.py tests/test_auth.py tests/test_recipe_cascade.py tests/test_user_repository.py"
 SEARCH_TESTS="tests/test_recipe_lsh.py tests/test_search.py tests/test_recipe.py"
 REPO_TESTS="tests/test_repository.py"
 # ALL_TESTS is a combination of all other test categories

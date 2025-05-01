@@ -105,14 +105,22 @@ def test_inactive_user(db_session: Session):
     db_session.add(inactive_user)
     db_session.commit()
     
-    # Authentication should still work (repository doesn't check is_active)
+    # Authentication should fail for inactive users
     auth_inactive = user_repository.authenticate(
         db_session, username="inactive", password="password123"
     )
-    assert auth_inactive is not None
+    assert auth_inactive is None
     
-    # But is_active check should return False
-    assert user_repository.is_active(auth_inactive) is False
+    # Activate the user
+    inactive_user.is_active = True
+    db_session.commit()
+    
+    # Authentication should now succeed
+    auth_active = user_repository.authenticate(
+        db_session, username="inactive", password="password123"
+    )
+    assert auth_active is not None
+    assert user_repository.is_active(auth_active) is True
 
 def test_role_checks(db_session: Session):
     """Test user role checking functionality."""
