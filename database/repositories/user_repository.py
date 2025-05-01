@@ -1,6 +1,6 @@
 # TODO: Implement user-specific repository operations
 from typing import Optional, List, Any, Dict
-from datetime import datetime
+from datetime import datetime, UTC
 from sqlalchemy.orm import Session
 from sqlalchemy import and_
 from backend.models.user import User, UserRole
@@ -28,7 +28,8 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             hashed_password=hashed_password,
             role=obj_in.role,
             is_active=True,
-            created_at=datetime.utcnow()
+            created_at=datetime.now(UTC),
+            updated_at=datetime.now(UTC)
         )
         db.add(db_obj)
         db.commit()
@@ -46,7 +47,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             del update_data["password"]
             update_data["hashed_password"] = hashed_password
         
-        update_data["updated_at"] = datetime.utcnow()
+        update_data["updated_at"] = datetime.now(UTC)
         return super().update(db, db_obj=db_obj, obj_in=update_data)
     
     def authenticate(self, db: Session, *, username: str, password: str) -> Optional[User]:
@@ -63,7 +64,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             return None
             
         # Update last login timestamp
-        user.last_login = datetime.utcnow()
+        user.last_login = datetime.now(UTC)
         db.commit()
         
         return user
@@ -88,7 +89,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             return None
         
         user.is_active = True
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(user)
         return user
@@ -99,7 +100,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             return None
         
         user.is_active = False
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(user)
         return user
@@ -110,7 +111,7 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
             return None
         
         user.role = new_role
-        user.updated_at = datetime.utcnow()
+        user.updated_at = datetime.now(UTC)
         db.commit()
         db.refresh(user)
         return user
