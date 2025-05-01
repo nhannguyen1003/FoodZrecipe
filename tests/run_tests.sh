@@ -16,12 +16,11 @@ UNITTEST_DIR="$TEST_ROOT/unittest"
 INTEG_DIR="$TEST_ROOT/integ"
 
 # Define test categories and their associated patterns
-CONNECTION_PATTERN="test_db_connection.py"
-USER_PATTERN="test_user*.py test_auth*.py test_recipe_cascade*.py"
-SEARCH_PATTERN="test_recipe_lsh*.py test_search*.py test_recipe*.py"
-REPO_PATTERN="test_repository*.py"
-SEED_PATTERN="test_seed*.py test_recipe_data*.py test_recipe_quality*.py"
-INTEG_PATTERN="test_*.py"
+CONNECTION_PATTERN="*/test_db_connection.py"
+USER_PATTERN="*/test_user*.py"
+SEARCH_PATTERN="*/test_search*.py"
+REPO_PATTERN="*/test_repository*.py"
+SEED_PATTERN="*/test_seed*.py"
 CATEGORY_PATTERN="test_category*.py"
 
 # Function to find test files based on patterns
