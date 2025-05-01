@@ -12,16 +12,17 @@ export PYTHONPATH="$(dirname "$(dirname "$(realpath "$0")")")":$PYTHONPATH
 
 # Define test categories and their associated files
 # Using simple variables instead of associative arrays for compatibility
-CONNECTION_TESTS="tests/test_db_connection.py"
-USER_TESTS="tests/test_user_model.py tests/test_auth.py tests/test_recipe_cascade.py tests/test_user_repository.py"
-SEARCH_TESTS="tests/test_recipe_lsh.py tests/test_search.py tests/test_recipe.py"
-REPO_TESTS="tests/test_repository.py"
-SEED_TESTS="tests/test_seed_db.py tests/test_recipe_data.py tests/test_recipe_quality.py"
+CONNECTION_TESTS="tests/unittest/test_db_connection.py"
+USER_TESTS="tests/unittest/test_user_model.py tests/unittest/test_auth.py tests/unittest/test_recipe_cascade.py tests/unittest/test_user_repository.py"
+SEARCH_TESTS="tests/unittest/test_recipe_lsh.py tests/unittest/test_search.py tests/unittest/test_recipe.py"
+REPO_TESTS="tests/unittest/test_repository.py"
+SEED_TESTS="tests/unittest/test_seed_db.py tests/unittest/test_recipe_data.py tests/unittest/test_recipe_quality.py"
+INTEG_TESTS="tests/integ/test_auth_api.py "
 # ALL_TESTS is a combination of all other test categories
 ALL_TESTS="$CONNECTION_TESTS $USER_TESTS $SEARCH_TESTS $REPO_TESTS $SEED_TESTS"
 
 # List of all categories (excluding "all")
-CATEGORIES=("connection" "user" "search" "repo" "seed")
+CATEGORIES=("connection" "user" "search" "repo" "seed" "integ")
 
 show_categories() {
     echo -e "${BLUE}Available test categories:${NC}"
@@ -66,6 +67,7 @@ get_tests_for_category() {
         "search") echo "$SEARCH_TESTS" ;;
         "repo") echo "$REPO_TESTS" ;;
         "seed") echo "$SEED_TESTS" ;;
+        "integ") echo "$INTEG_TESTS" ;;
         "all") echo "$ALL_TESTS" ;;
         *) echo "" ;;
     esac

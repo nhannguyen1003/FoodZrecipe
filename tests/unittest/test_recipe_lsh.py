@@ -5,7 +5,7 @@ from sqlalchemy import create_engine, MetaData
 from sqlalchemy.pool import StaticPool
 from typing import List
 
-from tests.test_models import TestRecipe, TestUser, UserRole, TestBase
+from tests.unittest.test_models import TestRecipe, TestUser, UserRole, TestBase
 from database.repositories.base_repository import BaseRepository
 from backend.schemas.recipe import RecipeCreate, RecipeUpdate
 

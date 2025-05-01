@@ -3,9 +3,9 @@ from sqlalchemy.orm import Session
 from typing import List
 
 from backend.models.recipe import Recipe
-from tests.test_models import TestRecipe
+from tests.unittest.test_models import TestRecipe
 from database.repositories.recipe_repository import recipe_repository
-from tests.test_recipe_lsh import TestRecipeRepository
+from tests.unittest.test_recipe_lsh import TestRecipeRepository
 
 @pytest.fixture
 def test_db(db_session):

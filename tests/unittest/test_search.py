@@ -2,9 +2,9 @@ import pytest
 from sqlalchemy.orm import Session
 from typing import List
 
-from tests.test_models import TestRecipe, TestUser, TestBase
+from tests.unittest.test_models import TestRecipe, TestUser, TestBase
 from database.repositories.base_repository import BaseRepository
-from tests.test_recipe_lsh import TestRecipeRepository
+from tests.unittest.test_recipe_lsh import TestRecipeRepository
 
 # This file focuses on integration testing of search functionality
 # Unit tests for LSH are in test_recipe_lsh.py

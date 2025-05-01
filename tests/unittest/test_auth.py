@@ -3,7 +3,7 @@ import time
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, Table, Column, Integer, String, Enum, Boolean, DateTime, ForeignKey
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import StaticPool
 import os
@@ -22,7 +22,8 @@ from database.repositories.user_repository import user_repository
 from backend.schemas.user import UserCreate, UserUpdate
 from main import app
 from config import settings
-from database.session import Base, get_db
+from database.session import get_db
+from sqlalchemy.ext.declarative import declarative_base
 
 # Use in-memory SQLite for testing
 SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
@@ -34,8 +35,25 @@ engine = create_engine(
 )
 TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+# Create a test-specific Base
+TestBase = declarative_base()
+
+# Define test-specific User model for SQLite compatibility
+class TestUser(TestBase):
+    __tablename__ = "users"
+    
+    id = Column(Integer, primary_key=True, index=True)
+    username = Column(String(50), unique=True, nullable=False, index=True)
+    email = Column(String(100), unique=True, nullable=False, index=True)
+    hashed_password = Column(String(255), nullable=False)
+    role = Column(Enum(UserRole), default=UserRole.REGULAR, nullable=False)
+    is_active = Column(Boolean, default=True, nullable=False)
+    created_at = Column(DateTime, nullable=False)
+    updated_at = Column(DateTime, nullable=False)
+    last_login = Column(DateTime, nullable=True)
+
 # Set up test database
-Base.metadata.create_all(bind=engine)
+TestBase.metadata.create_all(bind=engine)
 
 def override_get_db():
     db = TestingSessionLocal()
@@ -52,7 +70,7 @@ client = TestClient(app)
 @pytest.fixture(scope="function")
 def test_db():
     # Create tables
-    Base.metadata.create_all(bind=engine)
+    TestBase.metadata.create_all(bind=engine)
     
     # Create test users
     db = TestingSessionLocal()
@@ -63,7 +81,9 @@ def test_db():
             "email": "testadmin@example.com",
             "hashed_password": get_password_hash("testadmin"),
             "role": UserRole.ADMIN,
-            "is_active": True
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
         }
         user_repository.create_user_direct(db, **admin_user)
         
@@ -73,7 +93,9 @@ def test_db():
             "email": "testuser@example.com",
             "hashed_password": get_password_hash("testuser"),
             "role": UserRole.REGULAR,
-            "is_active": True
+            "is_active": True,
+            "created_at": datetime.utcnow(),
+            "updated_at": datetime.utcnow()
         }
         user_repository.create_user_direct(db, **regular_user)
         
@@ -82,7 +104,7 @@ def test_db():
     finally:
         db.close()
         # Drop tables after test
-        Base.metadata.drop_all(bind=engine)
+        TestBase.metadata.drop_all(bind=engine)
 
 def test_register_user(test_db):
     """Test user registration"""
@@ -234,7 +256,7 @@ def test_password_hashing():
 
 def test_token_creation():
     """Test JWT token creation."""
-    token = create_access_token(subject="testuser")
+    token = create_access_token(data={"sub": "testuser"})
     assert token is not None
     assert isinstance(token, str)
     
@@ -243,7 +265,7 @@ def test_token_creation():
     
     # Test token with custom expiration
     custom_expires = timedelta(minutes=30)
-    token_with_exp = create_access_token(subject="testuser", expires_delta=custom_expires)
+    token_with_exp = create_access_token(data={"sub": "testuser"}, expires_delta=custom_expires)
     assert token_with_exp is not None
     assert isinstance(token_with_exp, str)
     
