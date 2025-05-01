@@ -15,11 +15,12 @@ export PYTHONPATH="$(dirname "$(dirname "$(realpath "$0")")")":$PYTHONPATH
 CONNECTION_TESTS="tests/test_db_connection.py"
 USER_TESTS="tests/test_user_model.py tests/test_auth.py tests/test_recipe_cascade.py"
 SEARCH_TESTS="tests/test_recipe_lsh.py tests/test_search.py tests/test_recipe.py"
+REPO_TESTS="tests/test_repository.py"
 # ALL_TESTS is a combination of all other test categories
-ALL_TESTS="$CONNECTION_TESTS $USER_TESTS $SEARCH_TESTS"
+ALL_TESTS="$CONNECTION_TESTS $USER_TESTS $SEARCH_TESTS $REPO_TESTS"
 
 # List of all categories (excluding "all")
-CATEGORIES=("connection" "user" "search")
+CATEGORIES=("connection" "user" "search" "repo")
 
 show_categories() {
     echo -e "${BLUE}Available test categories:${NC}"
@@ -52,6 +53,7 @@ get_tests_for_category() {
         "connection") echo "$CONNECTION_TESTS" ;;
         "user") echo "$USER_TESTS" ;;
         "search") echo "$SEARCH_TESTS" ;;
+        "repo") echo "$REPO_TESTS" ;;
         "all") echo "$ALL_TESTS" ;;
         *) echo "" ;;
     esac
