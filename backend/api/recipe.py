@@ -1,9 +1,9 @@
 # TODO: Implement recipe API endpoints
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Body
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Body, Query
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from backend.schemas.recipe import RecipeCreate, RecipeUpdate, RecipeResponse
-from backend.core.security import get_current_active_user
+from backend.core.security import get_current_active_user, get_current_user
 from backend.models.user import User
 from database.session import get_db
 from database.repositories.recipe_repository import recipe_repository
@@ -12,10 +12,22 @@ import json
 router = APIRouter()
 
 @router.get("/", response_model=List[RecipeResponse])
-def get_recipes(skip: int = 0, limit: int = 100, db: Session = Depends(get_db)):
-    """Get all recipes with pagination"""
-    recipes = recipe_repository.get_multi(db, skip=skip, limit=limit)
-    return recipes
+def get_recipes(
+    skip: int = 0, 
+    limit: int = 100, 
+    category: Optional[str] = None,
+    user_id: Optional[int] = None,
+    db: Session = Depends(get_db)
+):
+    """
+    Get all recipes with pagination and optional filtering by category or user
+    """
+    if category:
+        return recipe_repository.get_by_category(db, category=category, skip=skip, limit=limit)
+    elif user_id:
+        return recipe_repository.get_by_user_id(db, user_id=user_id, skip=skip, limit=limit)
+    else:
+        return recipe_repository.get_multi(db, skip=skip, limit=limit)
 
 @router.post("/", response_model=RecipeResponse)
 async def create_recipe(
@@ -250,3 +262,27 @@ def delete_recipe(recipe_id: int, db: Session = Depends(get_db), current_user: U
     # as a background task in a real system
     
     return recipe
+
+@router.get("/mine", response_model=List[RecipeResponse])
+def get_my_recipes(
+    skip: int = 0, 
+    limit: int = 100, 
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_active_user)
+):
+    """
+    Get all recipes owned by the currently authenticated user
+    """
+    return recipe_repository.get_by_user_id(db, user_id=current_user.id, skip=skip, limit=limit)
+
+@router.get("/search", response_model=List[RecipeResponse])
+def search_recipes(
+    query: str,
+    skip: int = 0,
+    limit: int = 20,
+    db: Session = Depends(get_db)
+):
+    """
+    Search recipes by text query
+    """
+    return recipe_repository.search_by_text(db, query=query, skip=skip, limit=limit)
