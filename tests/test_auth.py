@@ -2,6 +2,15 @@ import pytest
 import time
 from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine
+from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
+import os
+import sys
+
+# Add project root to Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from backend.models.user import User, UserRole
 from backend.core.security import (
@@ -11,6 +20,203 @@ from backend.core.security import (
 )
 from database.repositories.user_repository import user_repository
 from backend.schemas.user import UserCreate, UserUpdate
+from main import app
+from config import settings
+from database.session import Base, get_db
+
+# Use in-memory SQLite for testing
+SQLALCHEMY_DATABASE_URL = "sqlite:///:memory:"
+
+engine = create_engine(
+    SQLALCHEMY_DATABASE_URL,
+    connect_args={"check_same_thread": False},
+    poolclass=StaticPool,
+)
+TestingSessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
+
+# Set up test database
+Base.metadata.create_all(bind=engine)
+
+def override_get_db():
+    db = TestingSessionLocal()
+    try:
+        yield db
+    finally:
+        db.close()
+
+# Override the get_db dependency
+app.dependency_overrides[get_db] = override_get_db
+
+client = TestClient(app)
+
+@pytest.fixture(scope="function")
+def test_db():
+    # Create tables
+    Base.metadata.create_all(bind=engine)
+    
+    # Create test users
+    db = TestingSessionLocal()
+    try:
+        # Create admin user
+        admin_user = {
+            "username": "testadmin",
+            "email": "testadmin@example.com",
+            "hashed_password": get_password_hash("testadmin"),
+            "role": UserRole.ADMIN,
+            "is_active": True
+        }
+        user_repository.create_user_direct(db, **admin_user)
+        
+        # Create regular user
+        regular_user = {
+            "username": "testuser",
+            "email": "testuser@example.com",
+            "hashed_password": get_password_hash("testuser"),
+            "role": UserRole.REGULAR,
+            "is_active": True
+        }
+        user_repository.create_user_direct(db, **regular_user)
+        
+        yield db
+    
+    finally:
+        db.close()
+        # Drop tables after test
+        Base.metadata.drop_all(bind=engine)
+
+def test_register_user(test_db):
+    """Test user registration"""
+    response = client.post(
+        f"{settings.API_PREFIX}/auth/register",
+        json={
+            "username": "newuser",
+            "email": "newuser@example.com",
+            "password": "password123"
+        }
+    )
+    assert response.status_code == 201
+    data = response.json()
+    assert data["username"] == "newuser"
+    assert data["email"] == "newuser@example.com"
+    assert data["role"] == UserRole.REGULAR
+
+def test_register_duplicate_email(test_db):
+    """Test registration with duplicate email"""
+    # Register first user
+    client.post(
+        f"{settings.API_PREFIX}/auth/register",
+        json={
+            "username": "user1",
+            "email": "duplicate@example.com",
+            "password": "password123"
+        }
+    )
+    
+    # Try to register with same email
+    response = client.post(
+        f"{settings.API_PREFIX}/auth/register",
+        json={
+            "username": "user2",
+            "email": "duplicate@example.com",
+            "password": "password123"
+        }
+    )
+    assert response.status_code == 400
+    assert "already exists" in response.json()["detail"]
+
+def test_login_admin(test_db):
+    """Test admin login"""
+    login_data = {
+        "username": "testadmin",
+        "password": "testadmin"
+    }
+    response = client.post(
+        f"{settings.API_PREFIX}/auth/login",
+        data=login_data
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+
+def test_login_regular_user(test_db):
+    """Test regular user login"""
+    login_data = {
+        "username": "testuser",
+        "password": "testuser"
+    }
+    response = client.post(
+        f"{settings.API_PREFIX}/auth/login",
+        data=login_data
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert "access_token" in data
+    assert data["token_type"] == "bearer"
+
+def test_login_wrong_password(test_db):
+    """Test login with wrong password"""
+    login_data = {
+        "username": "testuser",
+        "password": "wrongpassword"
+    }
+    response = client.post(
+        f"{settings.API_PREFIX}/auth/login",
+        data=login_data
+    )
+    assert response.status_code == 401
+
+def test_get_current_user(test_db):
+    """Test getting current user info"""
+    # First login to get token
+    login_response = client.post(
+        f"{settings.API_PREFIX}/auth/login",
+        data={"username": "testuser", "password": "testuser"}
+    )
+    token = login_response.json()["access_token"]
+    
+    # Get user info
+    response = client.get(
+        f"{settings.API_PREFIX}/auth/me",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+    data = response.json()
+    assert data["username"] == "testuser"
+    assert data["email"] == "testuser@example.com"
+    assert data["role"] == UserRole.REGULAR
+
+def test_admin_only_endpoint_with_admin(test_db):
+    """Test admin-only endpoint with admin user"""
+    # First login as admin to get token
+    login_response = client.post(
+        f"{settings.API_PREFIX}/auth/login",
+        data={"username": "testadmin", "password": "testadmin"}
+    )
+    token = login_response.json()["access_token"]
+    
+    # Access admin-only endpoint
+    response = client.post(
+        f"{settings.API_PREFIX}/auth/test-admin",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 200
+
+def test_admin_only_endpoint_with_regular_user(test_db):
+    """Test admin-only endpoint with regular user (should fail)"""
+    # First login as regular user to get token
+    login_response = client.post(
+        f"{settings.API_PREFIX}/auth/login",
+        data={"username": "testuser", "password": "testuser"}
+    )
+    token = login_response.json()["access_token"]
+    
+    # Try to access admin-only endpoint
+    response = client.post(
+        f"{settings.API_PREFIX}/auth/test-admin",
+        headers={"Authorization": f"Bearer {token}"}
+    )
+    assert response.status_code == 403
 
 def test_password_hashing():
     """Test password hashing and verification."""

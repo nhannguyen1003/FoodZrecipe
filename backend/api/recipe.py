@@ -3,7 +3,7 @@ from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File,
 from typing import List, Optional, Dict, Any
 from sqlalchemy.orm import Session
 from backend.schemas.recipe import RecipeCreate, RecipeUpdate, RecipeResponse
-from backend.core.security import get_current_user
+from backend.core.security import get_current_active_user
 from backend.models.user import User
 from database.session import get_db
 from database.repositories.recipe_repository import recipe_repository
@@ -33,7 +33,7 @@ async def create_recipe(
     image: Optional[UploadFile] = File(None),
     raw_data: Optional[str] = Form(None),  # JSON string with original data
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Create new recipe with optional image
@@ -101,7 +101,7 @@ async def create_recipe(
 async def import_recipe(
     recipe_data: Dict[str, Any] = Body(...),
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """Import recipe data directly from JSON format"""
     
@@ -158,7 +158,7 @@ async def update_recipe(
     image: Optional[UploadFile] = File(None),
     raw_data: Optional[str] = Form(None),
     db: Session = Depends(get_db), 
-    current_user: User = Depends(get_current_user)
+    current_user: User = Depends(get_current_active_user)
 ):
     """
     Update recipe with optional image
@@ -233,7 +233,7 @@ async def update_recipe(
     return recipe
 
 @router.delete("/{recipe_id}", response_model=RecipeResponse)
-def delete_recipe(recipe_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_user)):
+def delete_recipe(recipe_id: int, db: Session = Depends(get_db), current_user: User = Depends(get_current_active_user)):
     """Delete recipe"""
     recipe = recipe_repository.get(db, id=recipe_id)
     if not recipe:

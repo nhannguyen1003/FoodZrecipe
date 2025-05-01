@@ -161,4 +161,46 @@ pytest
 2. Add proper validation with Pydantic schemas
 3. Use the repository pattern for database operations
 4. Document new endpoints in OpenAPI/Swagger
-5. Write unit tests for new functionality 
+5. Write unit tests for new functionality
+
+## Authentication System
+
+The FoodZrecipe app uses JWT (JSON Web Tokens) for secure authentication. The system supports:
+
+- User registration with secure password hashing using bcrypt
+- Login with username/password credentials
+- Role-based access control (admin vs regular users)
+- Token-based API authentication
+- Protected routes that require authentication
+
+### Authentication Flow
+
+1. Register a new user at `/api/v1/auth/register`
+2. Login to get a JWT access token at `/api/v1/auth/login`
+3. Include the token in subsequent requests using the `Authorization: Bearer <token>` header
+4. Use the `/api/v1/auth/me` endpoint to get current user information
+5. The token contains role information for role-based permissions
+
+### User Roles
+
+- **Regular Users**: Can create and manage their own recipes, search for recipes
+- **Admin Users**: Have access to special admin endpoints, system monitoring, and configuration
+
+### Security Features
+
+- Secure password hashing with bcrypt
+- JWT tokens with expiration
+- Role-based access control
+- Protected API endpoints
+
+### Testing Authentication
+
+You can test the authentication system using the provided test script:
+
+```
+python tests/integ/test_auth_api.py
+```
+
+Default accounts for testing:
+- Admin user: `admin`/`admin`
+- Regular user: `user`/`password` 

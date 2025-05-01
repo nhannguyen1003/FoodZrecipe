@@ -49,10 +49,20 @@ def init_db(db: Session) -> None:
         role=UserRole.ADMIN
     )
     
+    # Create default regular user
+    regular_user = User(
+        email="user@example.com",
+        username="user",
+        hashed_password=get_password_hash("password"),
+        is_active=True,
+        role=UserRole.REGULAR
+    )
+    
     db.add(admin_obj)
+    db.add(regular_user)
     db.commit()
     
-    logger.info("Initial admin user created")
+    logger.info("Initial admin and regular users created")
     
 def run_data_seeding():
     """Run data seeding script to populate database with sample data"""

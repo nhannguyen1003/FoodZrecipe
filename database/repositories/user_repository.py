@@ -114,5 +114,18 @@ class UserRepository(BaseRepository[User, UserCreate, UserUpdate]):
         db.commit()
         db.refresh(user)
         return user
+    
+    def create_user_direct(self, db: Session, **user_data) -> User:
+        """
+        Create a user directly with provided data (mainly for testing)
+        
+        This method bypasses the schema validation and allows creating users
+        with pre-hashed passwords.
+        """
+        db_obj = User(**user_data)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
 
 user_repository = UserRepository(User)

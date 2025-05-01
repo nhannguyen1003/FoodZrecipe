@@ -2,7 +2,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Body
 from typing import Dict, Any, List, Optional
 from sqlalchemy.orm import Session
-from backend.core.security import admin_required
+from backend.core.security import get_current_admin_user
 from backend.models.user import User
 from backend.services.lsh_service import lsh_service
 from database.session import get_db
@@ -12,7 +12,7 @@ from database.repositories.recipe_repository import recipe_repository
 router = APIRouter()
 
 @router.get("/dashboard", response_model=Dict[str, Any])
-def get_admin_dashboard(db: Session = Depends(get_db), current_user: User = Depends(admin_required)):
+def get_admin_dashboard(db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)):
     """
     Get admin dashboard data including:
     - System stats (total recipes, users)
@@ -48,7 +48,7 @@ def get_admin_dashboard(db: Session = Depends(get_db), current_user: User = Depe
 def get_algorithm_performance(
     test_size: int = 10,
     db: Session = Depends(get_db), 
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(get_current_admin_user)
 ):
     """
     Get algorithm performance metrics using a sample of the database as test data
@@ -123,7 +123,7 @@ def update_lsh_parameters(
     parameters: Dict[str, Any] = Body(...),
     rebuild_indices: bool = True,
     db: Session = Depends(get_db), 
-    current_user: User = Depends(admin_required)
+    current_user: User = Depends(get_current_admin_user)
 ):
     """
     Update LSH parameters and optionally rebuild indices
@@ -173,7 +173,7 @@ def update_lsh_parameters(
         raise HTTPException(status_code=500, detail=f"Error updating LSH parameters: {str(e)}")
 
 @router.post("/rebuild-indices", response_model=Dict[str, Any])
-def rebuild_indices(db: Session = Depends(get_db), current_user: User = Depends(admin_required)):
+def rebuild_indices(db: Session = Depends(get_db), current_user: User = Depends(get_current_admin_user)):
     """
     Rebuild all LSH indices
     
