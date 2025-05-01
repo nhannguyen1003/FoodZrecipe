@@ -1,0 +1,99 @@
+import logging
+from sqlalchemy.exc import SQLAlchemyError
+from database.session import engine, SessionLocal, create_tables, test_connection
+from database.base import Base
+from backend.models.user import User, UserRole
+from backend.models.recipe import Recipe
+from backend.core.security import get_password_hash
+from passlib.context import CryptContext
+
+# Configure logging
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
+# Password hashing
+pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
+
+def init_db() -> None:
+    """
+    Initialize the database by creating all tables and adding initial data.
+    This should be called during application startup.
+    """
+    try:
+        logger.info("Creating database tables...")
+        # Test database connection
+        if not test_connection():
+            logger.error("Failed to connect to the database. Aborting initialization.")
+            return False
+        
+        # Create all tables
+        create_tables()
+        logger.info("Database tables created successfully")
+        
+        # Add initial data if needed
+        db = SessionLocal()
+        try:
+            # Only add admin user if no users exist
+            user_count = db.query(User).count()
+            if user_count == 0:
+                logger.info("Adding initial admin user...")
+                admin_user = User(
+                    username="admin",
+                    email="admin@example.com",
+                    hashed_password=get_password_hash("adminpassword"),
+                    role=UserRole.ADMIN,
+                    is_active=True
+                )
+                db.add(admin_user)
+                
+                # Add a sample regular user
+                regular_user = User(
+                    username="user",
+                    email="user@example.com",
+                    hashed_password=get_password_hash("userpassword"),
+                    role=UserRole.REGULAR,
+                    is_active=True
+                )
+                db.add(regular_user)
+                
+                # Add some sample recipes
+                sample_recipe = Recipe(
+                    title="Classic Pancakes",
+                    description="Fluffy and delicious breakfast pancakes",
+                    ingredients=["1 cup all-purpose flour", "2 tbsp sugar", "2 tsp baking powder", 
+                                "1/2 tsp salt", "1 egg", "1 cup milk", "2 tbsp vegetable oil"],
+                    instructions=["Whisk dry ingredients together", 
+                                "Beat egg, milk, and oil in another bowl", 
+                                "Combine wet and dry ingredients, stir until just mixed", 
+                                "Heat a lightly oiled griddle over medium-high heat", 
+                                "Pour batter onto the griddle, cook until bubbles form", 
+                                "Flip and cook until browned on the other side"],
+                    image_url="https://example.com/pancakes.jpg",
+                    categories=["breakfast", "quick", "vegetarian"],
+                    prep_time=10,
+                    cook_time=15,
+                    servings=4,
+                    user_id=2  # Regular user
+                )
+                db.add(sample_recipe)
+                
+                db.commit()
+                logger.info("Initial data added successfully")
+            else:
+                logger.info("Database already has users, skipping initial data creation")
+                
+        except SQLAlchemyError as e:
+            db.rollback()
+            logger.error(f"Error adding initial data: {e}")
+        finally:
+            db.close()
+            
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+        raise
+
+if __name__ == "__main__":
+    # Can be run directly for manual initialization
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("Database initialization completed") 
