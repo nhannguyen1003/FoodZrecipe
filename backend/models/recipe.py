@@ -2,6 +2,7 @@
 from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, DateTime, Float, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
 from database.session import Base
 
 class Recipe(Base):
@@ -24,13 +25,24 @@ class Recipe(Base):
     # Relationship to user with back reference
     user = relationship("User", back_populates="recipes")
     
-    # Feature vector for LSH-based search
-    feature_vector = Column(ARRAY(Float), nullable=True)
+    # LSH-related fields for text-based search
+    text_feature_vector = Column(PG_ARRAY(Float), nullable=True)
+    text_hash_buckets = Column(ARRAY(Integer), nullable=True)
+    
+    # LSH-related fields for image-based search
+    image_feature_vector = Column(PG_ARRAY(Float), nullable=True)
+    image_hash_buckets = Column(ARRAY(Integer), nullable=True)
+    
+    # Combined hash buckets for hybrid search
+    combined_hash_buckets = Column(ARRAY(Integer), nullable=True)
     
     # Add indices for performance optimization
     __table_args__ = (
         Index('idx_recipe_title', 'title'),
         Index('idx_recipe_user_id', 'user_id'),
+        Index('idx_recipe_text_hash', 'text_hash_buckets', postgresql_using='gin'),
+        Index('idx_recipe_image_hash', 'image_hash_buckets', postgresql_using='gin'),
+        Index('idx_recipe_combined_hash', 'combined_hash_buckets', postgresql_using='gin'),
     )
     
     def __repr__(self):

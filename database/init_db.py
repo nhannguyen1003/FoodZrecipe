@@ -86,7 +86,11 @@ def init_db() -> bool:
                     cook_time=15,
                     servings=4,
                     user_id=regular_user.id,  # Use the actual ID
-                    feature_vector=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],  # Placeholder vector
+                    text_feature_vector=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],  # Placeholder text vector
+                    image_feature_vector=[0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],  # Placeholder image vector
+                    text_hash_buckets=[1, 3, 5, 7],  # Placeholder hash buckets
+                    image_hash_buckets=[2, 4, 6, 8],  # Placeholder hash buckets
+                    combined_hash_buckets=[1, 2, 5, 8],  # Placeholder combined hash buckets
                     created_at=now,
                     updated_at=now
                 )

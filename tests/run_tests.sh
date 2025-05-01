@@ -14,11 +14,12 @@ export PYTHONPATH="$(dirname "$(dirname "$(realpath "$0")")")":$PYTHONPATH
 # Using simple variables instead of associative arrays for compatibility
 CONNECTION_TESTS="tests/test_db_connection.py"
 USER_TESTS="tests/test_user_model.py tests/test_auth.py tests/test_recipe_cascade.py"
+SEARCH_TESTS="tests/test_recipe_lsh.py tests/test_search.py tests/test_recipe.py"
 # ALL_TESTS is a combination of all other test categories
-ALL_TESTS="$CONNECTION_TESTS $USER_TESTS"
+ALL_TESTS="$CONNECTION_TESTS $USER_TESTS $SEARCH_TESTS"
 
 # List of all categories (excluding "all")
-CATEGORIES=("connection" "user")
+CATEGORIES=("connection" "user" "search")
 
 show_categories() {
     echo -e "${BLUE}Available test categories:${NC}"
@@ -30,6 +31,11 @@ show_categories() {
     
     echo -e "  - ${YELLOW}user:${NC}"
     for file in $USER_TESTS; do
+        echo -e "      $(basename "$file")"
+    done
+    
+    echo -e "  - ${YELLOW}search:${NC}"
+    for file in $SEARCH_TESTS; do
         echo -e "      $(basename "$file")"
     done
     
@@ -45,6 +51,7 @@ get_tests_for_category() {
     case "$category" in
         "connection") echo "$CONNECTION_TESTS" ;;
         "user") echo "$USER_TESTS" ;;
+        "search") echo "$SEARCH_TESTS" ;;
         "all") echo "$ALL_TESTS" ;;
         *) echo "" ;;
     esac

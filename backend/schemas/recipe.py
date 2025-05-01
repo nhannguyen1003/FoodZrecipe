@@ -35,8 +35,27 @@ class RecipeResponse(RecipeBase):
     
     class Config:
         orm_mode = True
+        
+class RecipeInternalResponse(RecipeResponse):
+    """Internal schema with LSH fields - only used by admin dashboard"""
+    text_feature_vector: Optional[List[float]] = None
+    text_hash_buckets: Optional[List[int]] = None
+    image_feature_vector: Optional[List[float]] = None
+    image_hash_buckets: Optional[List[int]] = None
+    combined_hash_buckets: Optional[List[int]] = None
+    
+    class Config:
+        orm_mode = True
 
 class RecipeSearchQuery(BaseModel):
     query: str
+    limit: int = 10
+    offset: int = 0
+    
+class LSHSearchQuery(BaseModel):
+    text_hash_buckets: Optional[List[int]] = None
+    image_hash_buckets: Optional[List[int]] = None
+    combined_hash_buckets: Optional[List[int]] = None
+    feature_vector: Optional[List[float]] = None  # For re-ranking
     limit: int = 10
     offset: int = 0
