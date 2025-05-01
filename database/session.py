@@ -1,5 +1,5 @@
 # Database connection and session management
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.ext.declarative import declarative_base
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy.pool import QueuePool
@@ -55,8 +55,12 @@ def create_tables():
     """
     try:
         # Import all models to ensure they are registered with SQLAlchemy
-        from database.base import Base
+        from database.base import register_models
         
+        # Register all models
+        register_models()
+        
+        # Create tables
         Base.metadata.create_all(bind=engine)
         logger.info("Database tables created successfully")
     except Exception as e:
@@ -69,7 +73,7 @@ def test_connection():
     """
     try:
         db = SessionLocal()
-        db.execute("SELECT 1")
+        db.execute(text("SELECT 1"))
         logger.info("Database connection test successful")
         return True
     except Exception as e:

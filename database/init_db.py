@@ -1,10 +1,8 @@
 import logging
 from sqlalchemy.exc import SQLAlchemyError
 from database.session import engine, SessionLocal, create_tables, test_connection
-from database.base import Base
 from backend.models.user import User, UserRole
 from backend.models.recipe import Recipe
-from backend.core.security import get_password_hash
 from passlib.context import CryptContext
 
 # Configure logging
@@ -14,7 +12,11 @@ logger = logging.getLogger(__name__)
 # Password hashing
 pwd_context = CryptContext(schemes=["bcrypt"], deprecated="auto")
 
-def init_db() -> None:
+def get_password_hash(password: str) -> str:
+    """Hash a password for storing."""
+    return pwd_context.hash(password)
+
+def init_db() -> bool:
     """
     Initialize the database by creating all tables and adding initial data.
     This should be called during application startup.
@@ -55,6 +57,7 @@ def init_db() -> None:
                     is_active=True
                 )
                 db.add(regular_user)
+                db.flush()  # Flush to get IDs
                 
                 # Add some sample recipes
                 sample_recipe = Recipe(
@@ -73,27 +76,34 @@ def init_db() -> None:
                     prep_time=10,
                     cook_time=15,
                     servings=4,
-                    user_id=2  # Regular user
+                    user_id=regular_user.id,  # Use the actual ID
+                    feature_vector=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]  # Placeholder vector
                 )
                 db.add(sample_recipe)
                 
                 db.commit()
                 logger.info("Initial data added successfully")
+                return True
             else:
                 logger.info("Database already has users, skipping initial data creation")
+                return True
                 
         except SQLAlchemyError as e:
             db.rollback()
             logger.error(f"Error adding initial data: {e}")
+            return False
         finally:
             db.close()
             
     except Exception as e:
         logger.error(f"Error initializing database: {e}")
-        raise
+        return False
 
 if __name__ == "__main__":
     # Can be run directly for manual initialization
     logger.info("Initializing database...")
-    init_db()
-    logger.info("Database initialization completed") 
+    success = init_db()
+    if success:
+        logger.info("Database initialization completed successfully")
+    else:
+        logger.error("Database initialization failed") 
