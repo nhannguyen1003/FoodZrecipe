@@ -1,4 +1,5 @@
 import pytest
+import json
 from sqlalchemy.orm import Session
 from sqlalchemy import create_engine, MetaData
 from sqlalchemy.pool import StaticPool
@@ -23,8 +24,10 @@ class TestRecipeRepository(BaseRepository[TestRecipe, RecipeCreate, RecipeUpdate
         all_recipes = db.query(TestRecipe).all()
         for recipe in all_recipes:
             if recipe.text_hash_buckets:
+                # Parse JSON string to list
+                recipe_buckets = json.loads(recipe.text_hash_buckets)
                 # Manual overlap check for SQLite (which doesn't have array overlap)
-                if any(bucket in recipe.text_hash_buckets for bucket in hash_buckets):
+                if any(bucket in recipe_buckets for bucket in hash_buckets):
                     results.append(recipe)
         
         return results[skip:skip+limit]
@@ -35,8 +38,10 @@ class TestRecipeRepository(BaseRepository[TestRecipe, RecipeCreate, RecipeUpdate
         all_recipes = db.query(TestRecipe).all()
         for recipe in all_recipes:
             if recipe.image_hash_buckets:
+                # Parse JSON string to list
+                recipe_buckets = json.loads(recipe.image_hash_buckets)
                 # Manual overlap check for SQLite
-                if any(bucket in recipe.image_hash_buckets for bucket in hash_buckets):
+                if any(bucket in recipe_buckets for bucket in hash_buckets):
                     results.append(recipe)
         
         return results[skip:skip+limit]
@@ -49,12 +54,18 @@ class TestRecipeRepository(BaseRepository[TestRecipe, RecipeCreate, RecipeUpdate
             # Check all three hash bucket types
             has_overlap = False
             
-            if recipe.combined_hash_buckets and any(bucket in recipe.combined_hash_buckets for bucket in hash_buckets):
-                has_overlap = True
-            elif recipe.text_hash_buckets and any(bucket in recipe.text_hash_buckets for bucket in hash_buckets):
-                has_overlap = True
-            elif recipe.image_hash_buckets and any(bucket in recipe.image_hash_buckets for bucket in hash_buckets):
-                has_overlap = True
+            if recipe.combined_hash_buckets:
+                combined_buckets = json.loads(recipe.combined_hash_buckets)
+                if any(bucket in combined_buckets for bucket in hash_buckets):
+                    has_overlap = True
+            elif recipe.text_hash_buckets:
+                text_buckets = json.loads(recipe.text_hash_buckets)
+                if any(bucket in text_buckets for bucket in hash_buckets):
+                    has_overlap = True
+            elif recipe.image_hash_buckets:
+                image_buckets = json.loads(recipe.image_hash_buckets)
+                if any(bucket in image_buckets for bucket in hash_buckets):
+                    has_overlap = True
                 
             if has_overlap:
                 results.append(recipe)
@@ -80,11 +91,12 @@ class TestRecipeRepository(BaseRepository[TestRecipe, RecipeCreate, RecipeUpdate
         results = []
         for recipe in candidates:
             if use_image:
-                vector = recipe.image_feature_vector
+                vector_json = recipe.image_feature_vector
             else:
-                vector = recipe.text_feature_vector
+                vector_json = recipe.text_feature_vector
                 
-            if vector:
+            if vector_json:
+                vector = json.loads(vector_json)
                 similarity = self._cosine_similarity(query_vector, vector)
                 results.append((recipe, similarity))
         
@@ -145,50 +157,50 @@ def test_recipes(db, test_user):
         TestRecipe(
             title="Pancakes",
             description="Classic breakfast recipe",
-            ingredients=["flour", "eggs", "milk", "sugar"],
-            instructions=["Mix", "Cook", "Serve"],
-            categories=["breakfast", "sweet"],
+            ingredients=json.dumps(["flour", "eggs", "milk", "sugar"]),
+            instructions=json.dumps(["Mix", "Cook", "Serve"]),
+            categories=json.dumps(["breakfast", "sweet"]),
             prep_time=10,
             cook_time=15,
             servings=4,
             user_id=test_user.id,
-            text_feature_vector=[0.1, 0.2, 0.3, 0.4],
-            text_hash_buckets=[1, 3, 5],
-            image_feature_vector=[0.2, 0.3, 0.4, 0.5],
-            image_hash_buckets=[2, 4, 6],
-            combined_hash_buckets=[1, 2, 5]
+            text_feature_vector=json.dumps([0.1, 0.2, 0.3, 0.4]),
+            text_hash_buckets=json.dumps([1, 3, 5]),
+            image_feature_vector=json.dumps([0.2, 0.3, 0.4, 0.5]),
+            image_hash_buckets=json.dumps([2, 4, 6]),
+            combined_hash_buckets=json.dumps([1, 2, 5])
         ),
         TestRecipe(
             title="Spaghetti Carbonara",
             description="Italian pasta dish",
-            ingredients=["pasta", "eggs", "cheese", "bacon"],
-            instructions=["Cook pasta", "Mix ingredients", "Serve hot"],
-            categories=["dinner", "pasta", "italian"],
+            ingredients=json.dumps(["pasta", "eggs", "cheese", "bacon"]),
+            instructions=json.dumps(["Cook pasta", "Mix ingredients", "Serve hot"]),
+            categories=json.dumps(["dinner", "pasta", "italian"]),
             prep_time=15,
             cook_time=25,
             servings=2,
             user_id=test_user.id,
-            text_feature_vector=[0.3, 0.4, 0.5, 0.6],
-            text_hash_buckets=[5, 7, 9],
-            image_feature_vector=[0.4, 0.5, 0.6, 0.7],
-            image_hash_buckets=[4, 6, 8],
-            combined_hash_buckets=[5, 6, 9]
+            text_feature_vector=json.dumps([0.3, 0.4, 0.5, 0.6]),
+            text_hash_buckets=json.dumps([5, 7, 9]),
+            image_feature_vector=json.dumps([0.4, 0.5, 0.6, 0.7]),
+            image_hash_buckets=json.dumps([4, 6, 8]),
+            combined_hash_buckets=json.dumps([5, 6, 9])
         ),
         TestRecipe(
             title="Chocolate Cake",
             description="Rich dessert",
-            ingredients=["flour", "sugar", "chocolate", "eggs"],
-            instructions=["Mix dry ingredients", "Add wet ingredients", "Bake", "Frost"],
-            categories=["dessert", "baking", "sweet"],
+            ingredients=json.dumps(["flour", "sugar", "chocolate", "eggs"]),
+            instructions=json.dumps(["Mix dry ingredients", "Add wet ingredients", "Bake", "Frost"]),
+            categories=json.dumps(["dessert", "baking", "sweet"]),
             prep_time=30,
             cook_time=45,
             servings=8,
             user_id=test_user.id,
-            text_feature_vector=[0.5, 0.6, 0.7, 0.8],
-            text_hash_buckets=[7, 9, 11],
-            image_feature_vector=[0.6, 0.7, 0.8, 0.9],
-            image_hash_buckets=[6, 8, 10],
-            combined_hash_buckets=[7, 8, 11]
+            text_feature_vector=json.dumps([0.5, 0.6, 0.7, 0.8]),
+            text_hash_buckets=json.dumps([7, 9, 11]),
+            image_feature_vector=json.dumps([0.6, 0.7, 0.8, 0.9]),
+            image_hash_buckets=json.dumps([6, 8, 10]),
+            combined_hash_buckets=json.dumps([7, 8, 11])
         ),
     ]
     

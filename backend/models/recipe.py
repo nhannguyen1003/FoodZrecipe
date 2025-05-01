@@ -2,7 +2,7 @@
 from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, DateTime, Float, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
-from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY
+from sqlalchemy.dialects.postgresql import ARRAY as PG_ARRAY, JSONB
 from database.session import Base
 
 class Recipe(Base):
@@ -12,9 +12,13 @@ class Recipe(Base):
     title = Column(String(100), index=True, nullable=False)
     description = Column(Text, nullable=True)
     ingredients = Column(ARRAY(String), nullable=False)
-    instructions = Column(ARRAY(Text), nullable=False)
+    cleaned_ingredients = Column(ARRAY(String), nullable=True)  # Added for raw vs cleaned ingredients
+    instructions = Column(Text, nullable=False)  # Changed from ARRAY to Text to support the single block format
     image_url = Column(String(255), nullable=True)
-    categories = Column(ARRAY(String), nullable=True)
+    image_name = Column(String(255), nullable=True)  # Added to support Image_Name field
+    categories = Column(ARRAY(String), nullable=True)  # Maps to labels in sample data
+    labels = Column(ARRAY(String), nullable=True)  # Added explicit labels field for clarity
+    prompt = Column(Text, nullable=True)  # Added to support prompt field
     prep_time = Column(Integer, nullable=True)  # minutes
     cook_time = Column(Integer, nullable=True)  # minutes
     servings = Column(Integer, nullable=True)
@@ -35,6 +39,9 @@ class Recipe(Base):
     
     # Combined hash buckets for hybrid search
     combined_hash_buckets = Column(ARRAY(Integer), nullable=True)
+    
+    # Additional field for raw JSON data
+    raw_data = Column(JSONB, nullable=True)  # Store the original JSON data
     
     # Add indices for performance optimization
     __table_args__ = (

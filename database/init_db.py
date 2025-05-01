@@ -5,6 +5,11 @@ from database.session import engine, SessionLocal, create_tables, test_connectio
 from backend.models.user import User, UserRole
 from backend.models.recipe import Recipe
 from passlib.context import CryptContext
+from sqlalchemy.orm import Session
+import importlib
+import os
+import sys
+import subprocess
 
 # Configure logging
 logging.basicConfig(level=logging.INFO)
@@ -17,108 +22,64 @@ def get_password_hash(password: str) -> str:
     """Hash a password for storing."""
     return pwd_context.hash(password)
 
-def init_db() -> bool:
-    """
-    Initialize the database by creating all tables and adding initial data.
-    This should be called during application startup.
-    """
+def init_db(db: Session) -> None:
+    """Initialize the database with required initial data"""
+    # Check if we already have an admin user
+    user = db.query(User).filter(User.email == "admin@example.com").first()
+    
+    if user:
+        logger.info("Database already initialized, skipping initialization")
+        return
+    
+    logger.info("Creating initial admin user")
+    
+    # Create default admin user
+    admin_obj = User(
+        email="admin@example.com",
+        username="admin",
+        hashed_password=get_password_hash("admin"),
+        is_active=True,
+        role=UserRole.ADMIN
+    )
+    
+    db.add(admin_obj)
+    db.commit()
+    
+    logger.info("Initial admin user created")
+    
+def run_data_seeding():
+    """Run data seeding script to populate database with sample data"""
+    logger.info("Running data seeding script...")
+    
     try:
-        logger.info("Creating database tables...")
-        # Test database connection
-        if not test_connection():
-            logger.error("Failed to connect to the database. Aborting initialization.")
-            return False
+        # Check if scripts directory exists
+        scripts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "scripts")
+        seed_script_path = os.path.join(scripts_dir, "seed_db.py")
         
-        # Create all tables
-        create_tables()
-        logger.info("Database tables created successfully")
-        
-        # Add initial data if needed
-        db = SessionLocal()
-        try:
-            # Only add admin user if no users exist
-            user_count = db.query(User).count()
-            if user_count == 0:
-                logger.info("Adding initial admin user...")
-                now = datetime.datetime.utcnow()
-                
-                admin_user = User(
-                    username="admin",
-                    email="admin@example.com",
-                    hashed_password=get_password_hash("adminpassword"),
-                    role=UserRole.ADMIN,
-                    is_active=True,
-                    created_at=now,
-                    updated_at=now,
-                    last_login=now
-                )
-                db.add(admin_user)
-                
-                # Add a sample regular user
-                regular_user = User(
-                    username="user",
-                    email="user@example.com",
-                    hashed_password=get_password_hash("userpassword"),
-                    role=UserRole.REGULAR,
-                    is_active=True,
-                    created_at=now,
-                    updated_at=now,
-                    last_login=now
-                )
-                db.add(regular_user)
-                db.flush()  # Flush to get IDs
-                
-                # Add some sample recipes
-                sample_recipe = Recipe(
-                    title="Classic Pancakes",
-                    description="Fluffy and delicious breakfast pancakes",
-                    ingredients=["1 cup all-purpose flour", "2 tbsp sugar", "2 tsp baking powder", 
-                                "1/2 tsp salt", "1 egg", "1 cup milk", "2 tbsp vegetable oil"],
-                    instructions=["Whisk dry ingredients together", 
-                                "Beat egg, milk, and oil in another bowl", 
-                                "Combine wet and dry ingredients, stir until just mixed", 
-                                "Heat a lightly oiled griddle over medium-high heat", 
-                                "Pour batter onto the griddle, cook until bubbles form", 
-                                "Flip and cook until browned on the other side"],
-                    image_url="https://example.com/pancakes.jpg",
-                    categories=["breakfast", "quick", "vegetarian"],
-                    prep_time=10,
-                    cook_time=15,
-                    servings=4,
-                    user_id=regular_user.id,  # Use the actual ID
-                    text_feature_vector=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],  # Placeholder text vector
-                    image_feature_vector=[0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9],  # Placeholder image vector
-                    text_hash_buckets=[1, 3, 5, 7],  # Placeholder hash buckets
-                    image_hash_buckets=[2, 4, 6, 8],  # Placeholder hash buckets
-                    combined_hash_buckets=[1, 2, 5, 8],  # Placeholder combined hash buckets
-                    created_at=now,
-                    updated_at=now
-                )
-                db.add(sample_recipe)
-                
-                db.commit()
-                logger.info("Initial data added successfully")
-                return True
-            else:
-                logger.info("Database already has users, skipping initial data creation")
-                return True
-                
-        except SQLAlchemyError as e:
-            db.rollback()
-            logger.error(f"Error adding initial data: {e}")
-            return False
-        finally:
-            db.close()
-            
+        if os.path.exists(seed_script_path):
+            # Run the seeding script as a subprocess
+            subprocess.run([sys.executable, seed_script_path], check=True)
+            logger.info("Data seeding completed")
+        else:
+            logger.warning(f"Seed script not found at {seed_script_path}")
+    
     except Exception as e:
-        logger.error(f"Error initializing database: {e}")
-        return False
-
+        logger.error(f"Error running data seeding: {e}")
+        # Continue with application startup even if seeding fails
+    
 if __name__ == "__main__":
     # Can be run directly for manual initialization
     logger.info("Initializing database...")
-    success = init_db()
-    if success:
-        logger.info("Database initialization completed successfully")
-    else:
-        logger.error("Database initialization failed") 
+    db = SessionLocal()
+    
+    try:
+        init_db(db)
+        
+        # Run data seeding if command line argument is provided
+        if len(sys.argv) > 1 and sys.argv[1] == "--seed":
+            run_data_seeding()
+    except Exception as e:
+        logger.error(f"Error initializing database: {e}")
+    finally:
+        db.close()
+        logger.info("Database initialization completed successfully") 

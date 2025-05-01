@@ -41,9 +41,13 @@ class TestRecipe(TestBase):
     description = Column(Text, nullable=True)
     # Use JSON for arrays in SQLite
     ingredients = Column(JSON, nullable=False)
-    instructions = Column(JSON, nullable=False)
+    cleaned_ingredients = Column(JSON, nullable=True)
+    instructions = Column(Text, nullable=False)
     image_url = Column(String(255), nullable=True)
+    image_name = Column(String(255), nullable=True)
     categories = Column(JSON, nullable=True)
+    labels = Column(JSON, nullable=True)
+    prompt = Column(Text, nullable=True)
     prep_time = Column(Integer, nullable=True)
     cook_time = Column(Integer, nullable=True)
     servings = Column(Integer, nullable=True)
@@ -64,6 +68,9 @@ class TestRecipe(TestBase):
     
     # Combined hash buckets for hybrid search
     combined_hash_buckets = Column(JSON, nullable=True)
+    
+    # Add raw data field
+    raw_data = Column(JSON, nullable=True)
     
     def __repr__(self):
         return f"<Recipe {self.title}>" 

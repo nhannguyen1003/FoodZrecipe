@@ -294,4 +294,4 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
                     
         return unique_results
 
-recipe_repository = RecipeRepository(Recipe)
+recipe_repository = RecipeRepository(Recipe) 
