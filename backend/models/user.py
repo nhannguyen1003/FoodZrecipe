@@ -1,4 +1,4 @@
-# TODO: Define User database model
+# User model definition for database
 from sqlalchemy import Column, Integer, String, Enum, Boolean, DateTime, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship

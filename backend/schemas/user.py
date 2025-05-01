@@ -1,4 +1,4 @@
-# TODO: Define Pydantic models for user data validation
+# Pydantic models for user data validation
 from pydantic import BaseModel, EmailStr, Field
 from backend.models.user import UserRole
 from typing import Optional, List

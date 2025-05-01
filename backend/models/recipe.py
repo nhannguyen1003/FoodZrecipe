@@ -1,4 +1,4 @@
-# TODO: Define Recipe database model
+# Recipe model definition for database
 from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, DateTime, Float, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship

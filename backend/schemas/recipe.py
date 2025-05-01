@@ -1,4 +1,4 @@
-# TODO: Define Pydantic models for recipe data validation
+# Pydantic models for recipe data validation
 from pydantic import BaseModel
 from typing import List, Optional, Dict, Any
 from datetime import datetime

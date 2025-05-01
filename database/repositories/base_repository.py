@@ -1,4 +1,4 @@
-# TODO: Implement base repository pattern for database operations
+# Base repository pattern implementation for database operations
 from typing import TypeVar, Generic, Type, List, Optional, Any, Dict, Union, Callable
 from sqlalchemy.orm import Session
 from sqlalchemy.exc import SQLAlchemyError

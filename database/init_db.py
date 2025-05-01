@@ -1,5 +1,14 @@
+"""
+Database initialization script for creating initial tables and admin user
+"""
 import logging
 import datetime
+import os
+import sys
+
+# Add the project root directory to the Python path
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from sqlalchemy.exc import SQLAlchemyError
 from database.session import engine, SessionLocal, create_tables, test_connection
 from backend.models.user import User, UserRole
@@ -7,8 +16,6 @@ from backend.models.recipe import Recipe
 from passlib.context import CryptContext
 from sqlalchemy.orm import Session
 import importlib
-import os
-import sys
 import subprocess
 
 # Configure logging
@@ -67,19 +74,40 @@ def run_data_seeding():
         logger.error(f"Error running data seeding: {e}")
         # Continue with application startup even if seeding fails
     
-if __name__ == "__main__":
-    # Can be run directly for manual initialization
-    logger.info("Initializing database...")
-    db = SessionLocal()
+def initialize_database():
+    """Main function to initialize the database completely"""
+    logger.info("Starting database initialization...")
     
+    # First, check connection
+    if not test_connection():
+        logger.error("Database connection failed. Cannot initialize.")
+        return False
+    
+    # Create database tables
+    try:
+        create_tables()
+        logger.info("Database tables created successfully")
+    except Exception as e:
+        logger.error(f"Error creating database tables: {e}")
+        return False
+    
+    # Initialize with admin user
+    db = SessionLocal()
     try:
         init_db(db)
-        
-        # Run data seeding if command line argument is provided
-        if len(sys.argv) > 1 and sys.argv[1] == "--seed":
-            run_data_seeding()
     except Exception as e:
-        logger.error(f"Error initializing database: {e}")
+        logger.error(f"Error initializing database data: {e}")
+        return False
     finally:
         db.close()
-        logger.info("Database initialization completed successfully") 
+    
+    logger.info("Database initialization completed successfully")
+    return True
+    
+if __name__ == "__main__":
+    # Can be run directly for manual initialization
+    success = initialize_database()
+    
+    # Run data seeding if command line argument is provided
+    if success and len(sys.argv) > 1 and sys.argv[1] == "--seed":
+        run_data_seeding() 
