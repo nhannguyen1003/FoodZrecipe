@@ -1,4 +1,5 @@
 import logging
+import datetime
 from sqlalchemy.exc import SQLAlchemyError
 from database.session import engine, SessionLocal, create_tables, test_connection
 from backend.models.user import User, UserRole
@@ -39,12 +40,17 @@ def init_db() -> bool:
             user_count = db.query(User).count()
             if user_count == 0:
                 logger.info("Adding initial admin user...")
+                now = datetime.datetime.utcnow()
+                
                 admin_user = User(
                     username="admin",
                     email="admin@example.com",
                     hashed_password=get_password_hash("adminpassword"),
                     role=UserRole.ADMIN,
-                    is_active=True
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                    last_login=now
                 )
                 db.add(admin_user)
                 
@@ -54,7 +60,10 @@ def init_db() -> bool:
                     email="user@example.com",
                     hashed_password=get_password_hash("userpassword"),
                     role=UserRole.REGULAR,
-                    is_active=True
+                    is_active=True,
+                    created_at=now,
+                    updated_at=now,
+                    last_login=now
                 )
                 db.add(regular_user)
                 db.flush()  # Flush to get IDs
@@ -77,7 +86,9 @@ def init_db() -> bool:
                     cook_time=15,
                     servings=4,
                     user_id=regular_user.id,  # Use the actual ID
-                    feature_vector=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8]  # Placeholder vector
+                    feature_vector=[0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8],  # Placeholder vector
+                    created_at=now,
+                    updated_at=now
                 )
                 db.add(sample_recipe)
                 

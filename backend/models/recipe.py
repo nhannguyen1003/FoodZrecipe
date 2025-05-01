@@ -1,5 +1,5 @@
 # TODO: Define Recipe database model
-from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, DateTime, Float
+from sqlalchemy import Column, Integer, String, Text, ARRAY, ForeignKey, DateTime, Float, Index
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
 from database.session import Base
@@ -8,20 +8,30 @@ class Recipe(Base):
     __tablename__ = "recipes"
     
     id = Column(Integer, primary_key=True, index=True)
-    title = Column(String, index=True)
-    description = Column(Text)
-    ingredients = Column(ARRAY(String))
-    instructions = Column(ARRAY(Text))
-    image_url = Column(String)
-    categories = Column(ARRAY(String))
-    prep_time = Column(Integer)  # minutes
-    cook_time = Column(Integer)  # minutes
-    servings = Column(Integer)
-    user_id = Column(Integer, ForeignKey("users.id"))
-    created_at = Column(DateTime, server_default=func.now())
+    title = Column(String(100), index=True, nullable=False)
+    description = Column(Text, nullable=True)
+    ingredients = Column(ARRAY(String), nullable=False)
+    instructions = Column(ARRAY(Text), nullable=False)
+    image_url = Column(String(255), nullable=True)
+    categories = Column(ARRAY(String), nullable=True)
+    prep_time = Column(Integer, nullable=True)  # minutes
+    cook_time = Column(Integer, nullable=True)  # minutes
+    servings = Column(Integer, nullable=True)
+    user_id = Column(Integer, ForeignKey("users.id", ondelete="CASCADE"), nullable=False)
+    created_at = Column(DateTime, server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now(), nullable=False)
     
-    # TODO: Add relationship to user
+    # Relationship to user with back reference
     user = relationship("User", back_populates="recipes")
     
-    # TODO: Add feature vector column for LSH
-    feature_vector = Column(ARRAY(Float))
+    # Feature vector for LSH-based search
+    feature_vector = Column(ARRAY(Float), nullable=True)
+    
+    # Add indices for performance optimization
+    __table_args__ = (
+        Index('idx_recipe_title', 'title'),
+        Index('idx_recipe_user_id', 'user_id'),
+    )
+    
+    def __repr__(self):
+        return f"<Recipe {self.title}>"
