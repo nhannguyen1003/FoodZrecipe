@@ -22,13 +22,22 @@ sys.path.insert(0, str(Path(__file__).parent.parent))
 
 # Import the shared LSH processor from backend
 from backend.utils.lsh_utils import lsh_processor
+# Import the text processors for direct access if needed
+from backend.utils.text_processors import (
+    title_processor,
+    ingredients_processor,
+    instructions_processor,
+    process_recipe_text_fields
+)
 
 # Configure logging
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
 logger = logging.getLogger(__name__)
 
 def clean_text(text: str) -> str:
-    """Basic text cleaning"""
+    """
+    Basic text cleaning (legacy method - using text_processors is preferred)
+    """
     if isinstance(text, list):
         text = " ".join(text)
     # Convert to lowercase
@@ -58,8 +67,22 @@ def process_recipe(recipe: Dict[str, Any], images_dir: str, available_images: Li
             else:
                 logger.warning(f"Recipe has no image field: {recipe.get('Title', 'unknown')}")
             
+        # Pre-process the recipe text fields for better embeddings
+        # This is now handled within lsh_processor.process_recipe but we can do it here too
+        # for direct access to processed fields
+        processed_fields = process_recipe_text_fields({
+            'title': recipe.get('Title', recipe.get('title', '')),
+            'ingredients': recipe.get('Ingredients', recipe.get('ingredients', [])),
+            'instructions': recipe.get('Instructions', recipe.get('instructions', ''))
+        })
+        
+        # Store processed text for debugging or reference (optional)
+        recipe['processed_title'] = processed_fields['processed_title']
+        recipe['processed_ingredients'] = processed_fields['processed_ingredients']
+        recipe['processed_instructions'] = processed_fields['processed_instructions']
+        
         # Use the shared LSH processor to generate consistent embeddings and hash buckets
-        # Now also processing images using the provided images_dir
+        # This now uses our specialized text processors internally
         processed_recipe = lsh_processor.process_recipe(recipe, images_dir)
         
         # Map lsh_* field names to the correct format for database compatibility
@@ -73,7 +96,10 @@ def process_recipe(recipe: Dict[str, Any], images_dir: str, available_images: Li
             'lsh_text_vector': 'text_feature_vector',
             'lsh_text_hash': 'text_hash_buckets',
             'lsh_image_vector': 'image_feature_vector',
-            'lsh_image_hash': 'image_hash_buckets'
+            'lsh_image_hash': 'image_hash_buckets',
+            'processed_title': 'processed_title',
+            'processed_ingredients': 'processed_ingredients',
+            'processed_instructions': 'processed_instructions'
         }
         
         # Create a new recipe dictionary with the correct field names
@@ -81,6 +107,8 @@ def process_recipe(recipe: Dict[str, Any], images_dir: str, available_images: Li
         for lsh_field, db_field in field_mapping.items():
             if lsh_field in processed_recipe:
                 final_recipe[db_field] = processed_recipe[lsh_field]
+            elif lsh_field in recipe:  # Check if already in the original recipe
+                final_recipe[db_field] = recipe[lsh_field]
             else:
                 logger.warning(f"Missing field {lsh_field} in processed recipe")
         

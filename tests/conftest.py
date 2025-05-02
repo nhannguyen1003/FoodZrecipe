@@ -1,7 +1,17 @@
 import os
 import pytest
 import tempfile
-from unittest.mock import patch, MagicMock
+# Try to import from unittest.mock, but fall back to the mock package if that fails
+try:
+    from unittest.mock import patch, MagicMock
+except ImportError:
+    try:
+        from mock import patch, MagicMock
+    except ImportError:
+        import sys
+        print("Error: Neither unittest.mock nor the mock package is available.")
+        print("Please install the mock package with: pip install mock")
+        sys.exit(1)
 import logging
 
 # Configure test logging

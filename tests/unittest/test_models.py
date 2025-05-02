@@ -70,6 +70,14 @@ class TestRecipe(TestBase):
     # Combined hash buckets for hybrid search
     combined_hash_buckets = Column(JSON, nullable=True)
     
+    # Field-specific LSH-related fields for multi-field search
+    title_feature_vector = Column(JSON, nullable=True)
+    ingredients_feature_vector = Column(JSON, nullable=True)
+    instructions_feature_vector = Column(JSON, nullable=True)
+    title_hash_buckets = Column(JSON, nullable=True)
+    ingredients_hash_buckets = Column(JSON, nullable=True)
+    instructions_hash_buckets = Column(JSON, nullable=True)
+    
     # Add raw data field
     raw_data = Column(JSON, nullable=True)
     

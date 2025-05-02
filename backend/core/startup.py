@@ -52,15 +52,25 @@ def run_data_seeding_if_needed():
             if recipe_count == 0 or force_seed:
                 logger.info(f"Running data seeding (recipe_count={recipe_count}, force_seed={force_seed})")
                 
-                # Import and run the seeding function
-                scripts_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "scripts")
-                sys.path.insert(0, scripts_dir)
+                # Use the data initialization scripts
+                data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
                 
                 try:
-                    from seed_data import seed_database
-                    seed_database()
-                except ImportError:
-                    logger.error("Could not import seed_database function. Make sure scripts/seed_data.py exists.")
+                    import subprocess
+                    
+                    # Run the schema creation script if needed
+                    schema_script = os.path.join(data_dir, "put_schemas_to_db.py")
+                    logger.info(f"Running schema creation script: {schema_script}")
+                    subprocess.run([sys.executable, schema_script], check=True)
+                    
+                    # Run the data loading script
+                    data_script = os.path.join(data_dir, "put_data_to_db.py")
+                    logger.info(f"Running data loading script: {data_script}")
+                    subprocess.run([sys.executable, data_script], check=True)
+                    
+                    logger.info("Data seeding completed successfully")
+                except Exception as e:
+                    logger.error(f"Error running data initialization scripts: {e}")
             else:
                 logger.info(f"Skipping data seeding (recipe_count={recipe_count}, force_seed={force_seed})")
         finally:

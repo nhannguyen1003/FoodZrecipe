@@ -422,6 +422,25 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         # Return sorted list of unique categories
         return sorted(list(all_categories))
 
+    def create_with_user_id(self, db: Session, obj_in: Union[Dict[str, Any], RecipeCreate], user_id: int) -> Recipe:
+        """
+        Create a recipe and set the user_id field
+        
+        Args:
+            db: Database session
+            obj_in: Recipe data
+            user_id: ID of the user creating the recipe
+            
+        Returns:
+            Created Recipe object
+        """
+        obj_in_data = obj_in.dict() if hasattr(obj_in, "dict") else obj_in
+        db_obj = Recipe(**obj_in_data, user_id=user_id)
+        db.add(db_obj)
+        db.commit()
+        db.refresh(db_obj)
+        return db_obj
+
     def create_with_categories(self, obj_in: Dict[str, Any], user_id: int, category_ids: Optional[List[int]] = None) -> Recipe:
         """Create a recipe with categories"""
         # Create recipe without categories first
@@ -429,7 +448,7 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         if "category_ids" in obj_in_data:
             obj_in_data.pop("category_ids")
         
-        recipe = self.create_with_user_id(obj_in_data, user_id)
+        recipe = self.create_with_user_id(None, obj_in_data, user_id)
         
         # Add categories if provided
         if category_ids:
