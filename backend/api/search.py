@@ -1,6 +1,6 @@
 # TODO: Implement search API endpoints
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query
-from typing import List, Optional
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form, Query, Body
+from typing import List, Optional, Dict, Any
 import tempfile
 import os
 import numpy as np
@@ -9,6 +9,9 @@ from backend.schemas.recipe import RecipeResponse, RecipeSearchQuery
 from backend.services.lsh_service import lsh_service
 from database.session import get_db
 from database.repositories.recipe_repository import recipe_repository
+from backend.models.recipe import Recipe
+from backend.schemas.search import MultiFieldSearchQuery, SearchResults, SearchResult
+from backend.services.multi_field_search_service import multi_field_search_service
 
 router = APIRouter()
 
@@ -252,3 +255,125 @@ def search_recipes(
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Recipe search failed: {str(e)}")
+
+@router.post("/multi-field", response_model=List[RecipeResponse])
+def search_recipes_multi_field(
+    search_query: MultiFieldSearchQuery = Body(...),
+    db: Session = Depends(get_db)
+):
+    """
+    Search recipes using multi-field search with custom weights
+    
+    Allows searching by title, ingredients, and instructions separately with configurable weights.
+    
+    Fields:
+    - title_query: Title search query (optional)
+    - ingredients_query: List of ingredients to search for (optional)
+    - instructions_query: Instructions search query (optional)
+    - weights: Dictionary with field weights (e.g. {"title": 0.5, "ingredients": 0.3, "instructions": 0.2})
+    - limit: Maximum number of results to return (default: 10)
+    - offset: Pagination offset (default: 0)
+    - category_ids: Optional list of category IDs to filter by
+    
+    At least one query field must be provided.
+    """
+    # Validate that at least one query field is provided
+    if not any([search_query.title_query, search_query.ingredients_query, search_query.instructions_query]):
+        raise HTTPException(
+            status_code=400,
+            detail="At least one of title_query, ingredients_query, or instructions_query must be provided"
+        )
+    
+    # Validate weights if provided
+    if search_query.weights:
+        total_weight = sum(search_query.weights.values())
+        if total_weight <= 0:
+            raise HTTPException(
+                status_code=400,
+                detail="The sum of weights must be greater than 0"
+            )
+    
+    # Perform multi-field search
+    results = multi_field_search_service.multi_field_search(
+        db,
+        title_query=search_query.title_query,
+        ingredients_query=search_query.ingredients_query,
+        instructions_query=search_query.instructions_query,
+        weights=search_query.weights,
+        k=search_query.limit
+    )
+    
+    # Apply category filtering if needed
+    if search_query.category_ids:
+        # Filter results by category IDs
+        filtered_results = []
+        for recipe in results:
+            # Check if the recipe has categories and if any match the requested categories
+            if recipe.category_relations and any(cat.id in search_query.category_ids for cat in recipe.category_relations):
+                filtered_results.append(recipe)
+        results = filtered_results
+    
+    # Apply pagination
+    results = results[search_query.offset:search_query.offset + search_query.limit]
+    
+    return results
+
+@router.get("/by-title", response_model=List[RecipeResponse])
+def search_recipes_by_title(
+    query: str = Query(..., description="Title search query"),
+    limit: int = Query(10, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Search recipes by title using semantic search
+    """
+    # Use the multi-field search service with title_query only
+    results = multi_field_search_service.multi_field_search(
+        db,
+        title_query=query,
+        weights={"title": 1.0, "ingredients": 0.0, "instructions": 0.0},
+        k=limit
+    )
+    
+    return results
+
+@router.get("/by-ingredients", response_model=List[RecipeResponse])
+def search_recipes_by_ingredients(
+    ingredients: str = Query(..., description="Comma-separated list of ingredients"),
+    limit: int = Query(10, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Search recipes by ingredients using semantic search
+    """
+    # Parse ingredients from comma-separated string
+    ingredient_list = [ing.strip() for ing in ingredients.split(',')]
+    
+    # Use the multi-field search service with ingredients_query only
+    results = multi_field_search_service.multi_field_search(
+        db,
+        ingredients_query=ingredient_list,
+        weights={"title": 0.0, "ingredients": 1.0, "instructions": 0.0},
+        k=limit
+    )
+    
+    return results
+
+@router.get("/by-instructions", response_model=List[RecipeResponse])
+def search_recipes_by_instructions(
+    query: str = Query(..., description="Instructions search query"),
+    limit: int = Query(10, description="Maximum number of results"),
+    db: Session = Depends(get_db)
+):
+    """
+    Search recipes by cooking instructions using semantic search
+    """
+    # Use the multi-field search service with instructions_query only
+    results = multi_field_search_service.multi_field_search(
+        db,
+        instructions_query=query,
+        weights={"title": 0.0, "ingredients": 0.0, "instructions": 1.0},
+        k=limit
+    )
+    
+    return results

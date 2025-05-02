@@ -25,6 +25,24 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         self.vector_dim = getattr(settings, 'LSH_VECTOR_DIM', 128)
         self.hash_bits = getattr(settings, 'LSH_HASH_BITS', 32)
         
+        # Multi-field indices
+        self.title_index = None
+        self.ingredients_index = None
+        self.instructions_index = None
+        self.title_recipe_map = {}
+        self.ingredients_recipe_map = {}
+        self.instructions_recipe_map = {}
+        
+        # Multi-field dimensions
+        self.title_dim = getattr(settings, 'TITLE_VECTOR_DIM', 64)
+        self.ingredients_dim = getattr(settings, 'INGREDIENTS_VECTOR_DIM', 128)
+        self.instructions_dim = getattr(settings, 'INSTRUCTIONS_VECTOR_DIM', 256)
+        
+        # Multi-field hash bits
+        self.title_bits = getattr(settings, 'TITLE_HASH_BITS', 32)
+        self.ingredients_bits = getattr(settings, 'INGREDIENTS_HASH_BITS', 64)
+        self.instructions_bits = getattr(settings, 'INSTRUCTIONS_HASH_BITS', 128)
+        
     def get_by_user_id(self, db: Session, *, user_id: int, skip: int = 0, limit: int = 100) -> List[Recipe]:
         return db.query(Recipe).filter(Recipe.user_id == user_id).offset(skip).limit(limit).all()
     
@@ -181,12 +199,15 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
             return
             
         # Generate text feature vector
-        text_data = f"{recipe.title} {recipe.description or ''} {' '.join(recipe.ingredients)} {' '.join(recipe.instructions)}"
+        text_data = f"{recipe.title} {recipe.description or ''} {' '.join(recipe.ingredients)} {recipe.instructions}"
         self.generate_feature_vector(db, recipe_id=recipe_id, text_data=text_data)
         
         # Generate image feature vector if image exists
         if recipe.image_url:
             self.generate_image_feature_vector(db, recipe_id=recipe_id, image_path=recipe.image_url)
+            
+        # Generate field-specific feature vectors
+        self.generate_multi_field_vectors(db, recipe_id=recipe_id)
     
     def search_by_text_vector(self, db: Session, *, query_vector: np.ndarray, k: int = 10) -> List[Recipe]:
         """
@@ -559,6 +580,282 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         # ... continue with existing search logic ...
         
         return recipes, total_count
+
+    def load_multi_field_indices(self, db: Session) -> None:
+        """
+        Load field-specific feature vectors into FAISS indices
+        """
+        recipes = db.query(Recipe).all()
+        
+        # Reset recipe ID mapping
+        self.recipe_ids = [recipe.id for recipe in recipes]
+        
+        # Title vectors
+        title_vectors = []
+        title_recipe_ids = []
+        for i, recipe in enumerate(recipes):
+            if recipe.title_feature_vector:
+                title_vectors.append(np.array(recipe.title_feature_vector, dtype=np.float32))
+                title_recipe_ids.append(i)
+                self.title_recipe_map[i] = recipe.id
+        
+        # Ingredients vectors
+        ingredients_vectors = []
+        ingredients_recipe_ids = []
+        for i, recipe in enumerate(recipes):
+            if recipe.ingredients_feature_vector:
+                ingredients_vectors.append(np.array(recipe.ingredients_feature_vector, dtype=np.float32))
+                ingredients_recipe_ids.append(i)
+                self.ingredients_recipe_map[i] = recipe.id
+        
+        # Instructions vectors
+        instructions_vectors = []
+        instructions_recipe_ids = []
+        for i, recipe in enumerate(recipes):
+            if recipe.instructions_feature_vector:
+                instructions_vectors.append(np.array(recipe.instructions_feature_vector, dtype=np.float32))
+                instructions_recipe_ids.append(i)
+                self.instructions_recipe_map[i] = recipe.id
+        
+        # Create FAISS indices for each field
+        if title_vectors:
+            # Convert list of vectors to a 2D numpy array
+            title_array = np.vstack(title_vectors)
+            
+            # Create FAISS index
+            self.title_index = faiss.IndexFlatL2(self.title_dim)
+            self.title_index.add(title_array)
+            
+        if ingredients_vectors:
+            # Convert list of vectors to a 2D numpy array
+            ingredients_array = np.vstack(ingredients_vectors)
+            
+            # Create FAISS index
+            self.ingredients_index = faiss.IndexFlatL2(self.ingredients_dim)
+            self.ingredients_index.add(ingredients_array)
+            
+        if instructions_vectors:
+            # Convert list of vectors to a 2D numpy array
+            instructions_array = np.vstack(instructions_vectors)
+            
+            # Create FAISS index
+            self.instructions_index = faiss.IndexFlatL2(self.instructions_dim)
+            self.instructions_index.add(instructions_array)
+    
+    def generate_multi_field_vectors(self, db: Session, *, recipe_id: int) -> None:
+        """
+        Generate field-specific feature vectors for a recipe
+        
+        Args:
+            db: Database session
+            recipe_id: ID of the recipe to update
+        """
+        from backend.services.multi_field_search_service import multi_field_search_service
+        
+        # Get the recipe
+        recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
+        if not recipe:
+            return
+            
+        # Generate embeddings using the multi-field search service
+        updated_recipe = multi_field_search_service.generate_embeddings_for_recipe(recipe)
+        
+        # Update the recipe in the database
+        db.add(updated_recipe)
+        db.commit()
+    
+    def update_multi_field_vectors(self, db: Session) -> None:
+        """
+        Update field-specific feature vectors for all recipes
+        """
+        from backend.services.multi_field_search_service import multi_field_search_service
+        
+        # Generate embeddings for all recipes
+        multi_field_search_service.generate_embeddings_for_all_recipes(db)
+        
+        # Rebuild indices
+        self.load_multi_field_indices(db)
+    
+    def search_by_title_vector(self, db: Session, *, query_vector: np.ndarray, k: int = 10) -> Tuple[List[int], List[float]]:
+        """
+        Search recipes by title feature vector using FAISS
+        
+        Args:
+            db: Database session
+            query_vector: Title vector to search for
+            k: Number of results to return
+            
+        Returns:
+            Tuple of (recipe_ids, similarity_scores)
+        """
+        if self.title_index is None or self.title_index.ntotal == 0:
+            return [], []
+            
+        # Make sure vector is the right shape
+        query_vector = query_vector.reshape(1, -1).astype(np.float32)
+        
+        # Search the FAISS index
+        distances, indices = self.title_index.search(query_vector, k)
+        
+        # Convert FAISS distances to similarity scores (0-1 range)
+        max_distance = np.max(distances) if distances.size > 0 else 1.0
+        similarities = 1.0 - (distances[0] / max_distance if max_distance > 0 else distances[0])
+        
+        # Convert indices to recipe IDs
+        recipe_ids = [self.title_recipe_map.get(int(idx)) for idx in indices[0] if idx >= 0 and int(idx) in self.title_recipe_map]
+        
+        return recipe_ids, similarities.tolist()
+    
+    def search_by_ingredients_vector(self, db: Session, *, query_vector: np.ndarray, k: int = 10) -> Tuple[List[int], List[float]]:
+        """
+        Search recipes by ingredients feature vector using FAISS
+        
+        Args:
+            db: Database session
+            query_vector: Ingredients vector to search for
+            k: Number of results to return
+            
+        Returns:
+            Tuple of (recipe_ids, similarity_scores)
+        """
+        if self.ingredients_index is None or self.ingredients_index.ntotal == 0:
+            return [], []
+            
+        # Make sure vector is the right shape
+        query_vector = query_vector.reshape(1, -1).astype(np.float32)
+        
+        # Search the FAISS index
+        distances, indices = self.ingredients_index.search(query_vector, k)
+        
+        # Convert FAISS distances to similarity scores (0-1 range)
+        max_distance = np.max(distances) if distances.size > 0 else 1.0
+        similarities = 1.0 - (distances[0] / max_distance if max_distance > 0 else distances[0])
+        
+        # Convert indices to recipe IDs
+        recipe_ids = [self.ingredients_recipe_map.get(int(idx)) for idx in indices[0] if idx >= 0 and int(idx) in self.ingredients_recipe_map]
+        
+        return recipe_ids, similarities.tolist()
+    
+    def search_by_instructions_vector(self, db: Session, *, query_vector: np.ndarray, k: int = 10) -> Tuple[List[int], List[float]]:
+        """
+        Search recipes by instructions feature vector using FAISS
+        
+        Args:
+            db: Database session
+            query_vector: Instructions vector to search for
+            k: Number of results to return
+            
+        Returns:
+            Tuple of (recipe_ids, similarity_scores)
+        """
+        if self.instructions_index is None or self.instructions_index.ntotal == 0:
+            return [], []
+            
+        # Make sure vector is the right shape
+        query_vector = query_vector.reshape(1, -1).astype(np.float32)
+        
+        # Search the FAISS index
+        distances, indices = self.instructions_index.search(query_vector, k)
+        
+        # Convert FAISS distances to similarity scores (0-1 range)
+        max_distance = np.max(distances) if distances.size > 0 else 1.0
+        similarities = 1.0 - (distances[0] / max_distance if max_distance > 0 else distances[0])
+        
+        # Convert indices to recipe IDs
+        recipe_ids = [self.instructions_recipe_map.get(int(idx)) for idx in indices[0] if idx >= 0 and int(idx) in self.instructions_recipe_map]
+        
+        return recipe_ids, similarities.tolist()
+    
+    def search_multi_field(
+        self,
+        db: Session,
+        *,
+        title_vector: Optional[np.ndarray] = None,
+        ingredients_vector: Optional[np.ndarray] = None,
+        instructions_vector: Optional[np.ndarray] = None,
+        weights: Optional[Dict[str, float]] = None,
+        k: int = 10
+    ) -> List[Recipe]:
+        """
+        Search recipes using weighted combination of field-specific searches
+        
+        Args:
+            db: Database session
+            title_vector: Title embedding vector (optional)
+            ingredients_vector: Ingredients embedding vector (optional)
+            instructions_vector: Instructions embedding vector (optional)
+            weights: Dictionary with weights for each field (optional)
+            k: Number of results to return
+            
+        Returns:
+            List of Recipe objects sorted by weighted similarity
+        """
+        # Default weights if not provided
+        if weights is None:
+            weights = {
+                "title": 0.3,
+                "ingredients": 0.4,
+                "instructions": 0.3
+            }
+        
+        # Initialize results dictionary to track scores
+        recipe_scores = {}
+        
+        # Search title index if vector provided
+        if title_vector is not None and weights.get("title", 0) > 0:
+            title_weight = weights.get("title", 0.3)
+            title_ids, title_scores = self.search_by_title_vector(db, query_vector=title_vector, k=k*2)
+            
+            # Add weighted scores to results
+            for idx, recipe_id in enumerate(title_ids):
+                if recipe_id not in recipe_scores:
+                    recipe_scores[recipe_id] = 0
+                recipe_scores[recipe_id] += title_scores[idx] * title_weight
+        
+        # Search ingredients index if vector provided
+        if ingredients_vector is not None and weights.get("ingredients", 0) > 0:
+            ingredients_weight = weights.get("ingredients", 0.4)
+            ingredients_ids, ingredients_scores = self.search_by_ingredients_vector(db, query_vector=ingredients_vector, k=k*2)
+            
+            # Add weighted scores to results
+            for idx, recipe_id in enumerate(ingredients_ids):
+                if recipe_id not in recipe_scores:
+                    recipe_scores[recipe_id] = 0
+                recipe_scores[recipe_id] += ingredients_scores[idx] * ingredients_weight
+        
+        # Search instructions index if vector provided
+        if instructions_vector is not None and weights.get("instructions", 0) > 0:
+            instructions_weight = weights.get("instructions", 0.3)
+            instructions_ids, instructions_scores = self.search_by_instructions_vector(db, query_vector=instructions_vector, k=k*2)
+            
+            # Add weighted scores to results
+            for idx, recipe_id in enumerate(instructions_ids):
+                if recipe_id not in recipe_scores:
+                    recipe_scores[recipe_id] = 0
+                recipe_scores[recipe_id] += instructions_scores[idx] * instructions_weight
+        
+        # Sort recipes by score
+        sorted_results = sorted(recipe_scores.items(), key=lambda x: x[1], reverse=True)
+        
+        # Get top k recipe IDs
+        top_ids = [r[0] for r in sorted_results[:k]]
+        
+        # Fetch recipes for the top IDs
+        recipes = db.query(Recipe).filter(Recipe.id.in_(top_ids)).all() if top_ids else []
+        
+        # Sort recipes to match the original order from scoring
+        sorted_recipes = []
+        for recipe_id in top_ids:
+            for recipe in recipes:
+                if recipe.id == recipe_id:
+                    sorted_recipes.append(recipe)
+                    break
+        
+        return sorted_recipes
+    
+    def get_multi_by_ids(self, db: Session, *, ids: List[int]) -> List[Recipe]:
+        """Get multiple recipes by their IDs"""
+        return db.query(Recipe).filter(Recipe.id.in_(ids)).all() if ids else []
 
 # Create an instance with just the model
 recipe_repository = RecipeRepository(None)  # Pass None for db, it will be provided at runtime 

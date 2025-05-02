@@ -5,6 +5,7 @@ import sys
 from database.session import SessionLocal
 from database.repositories.recipe_repository import recipe_repository
 from backend.services.lsh_service import lsh_service
+from backend.services.multi_field_search_service import multi_field_search_service
 
 logger = logging.getLogger(__name__)
 
@@ -34,6 +35,40 @@ def initialize_lsh_indices():
         logger.error(f"Error initializing LSH indices: {str(e)}")
         # Don't fail application startup if indices can't be built
         # The application can still work with standard search
+
+def initialize_multi_field_search():
+    """
+    Initialize multi-field search indices at application startup
+    
+    This loads field-specific embeddings and creates FAISS indices for them
+    """
+    logger.info("Initializing multi-field search indices...")
+    
+    try:
+        db = SessionLocal()
+        try:
+            # Build multi-field search indices
+            multi_field_search_service.initialize_indices()
+            multi_field_search_service.build_indices(db)
+            
+            # Initialize recipe repository's multi-field indices
+            recipe_repository.load_multi_field_indices(db)
+            
+            # Get statistics for logging
+            title_index_size = getattr(recipe_repository.title_index, 'ntotal', 0)
+            ingredients_index_size = getattr(recipe_repository.ingredients_index, 'ntotal', 0)
+            instructions_index_size = getattr(recipe_repository.instructions_index, 'ntotal', 0)
+            
+            logger.info(f"Multi-field search indices initialized successfully: "
+                       f"{title_index_size} title vectors, "
+                       f"{ingredients_index_size} ingredients vectors, "
+                       f"{instructions_index_size} instructions vectors")
+            
+        finally:
+            db.close()
+    except Exception as e:
+        logger.error(f"Error initializing multi-field search indices: {str(e)}")
+        # Don't fail application startup if indices can't be built
 
 def run_data_seeding_if_needed():
     """
@@ -89,4 +124,7 @@ def init_app():
     run_data_seeding_if_needed()
     
     # Initialize FAISS LSH indices
-    initialize_lsh_indices() 
+    initialize_lsh_indices()
+    
+    # Initialize multi-field search indices
+    initialize_multi_field_search() 
