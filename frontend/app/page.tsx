@@ -1,7 +1,6 @@
-import FeaturedRecipes from './components/FeaturedRecipes';
 import CategorySection from './components/CategorySection';
-import LatestRecipes from './components/LatestRecipes';
 import SearchBar from './components/SearchBar';
+import RandomRecipes from './components/RandomRecipes';
 
 export default function Home() {
   return (
@@ -24,9 +23,8 @@ export default function Home() {
         </div>
       </section>
       
-      <FeaturedRecipes />
       <CategorySection />
-      <LatestRecipes />
+      <RandomRecipes />
     </div>
   );
 }

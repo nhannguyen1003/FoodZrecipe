@@ -1,67 +1,124 @@
+'use client';
+
+import { useState, useEffect } from 'react';
 import Image from 'next/image';
 import Link from 'next/link';
+import { categoryApi, Category, getImageUrl } from '../utils/api';
 
-const featuredItems = [
-  {
-    id: 'healthy',
-    title: 'HEALTHY',
-    image: '/images/featured/Lemon-Rosemary-Chicken-Soup.jpg',
-    href: '/recipes/category/healthy'
-  },
-  {
-    id: 'bowls',
-    title: 'BOWLS',
-    image: '/images/featured/Crockpot-Chicken-Bowls.jpg',
-    href: '/recipes/category/bowls'
-  },
-  {
-    id: 'most-popular',
-    title: 'MOST POPULAR',
-    image: '/images/featured/Crispy-Rice-Salad-4.jpg',
-    href: '/recipes/most-popular'
-  },
-  {
-    id: 'vegetarian',
-    title: 'VEGETARIAN',
-    image: '/images/featured/Cauliflower-Black-Bean-Tostadas-4.jpg',
-    href: '/recipes/category/vegetarian'
-  },
-];
+// Define featured categories to show (these are fixed)
+const FEATURED_CATEGORIES = ['healthy', 'dinner', 'vegetarian', 'desserts'];
 
 export default function FeaturedRecipes() {
+  const [featuredItems, setFeaturedItems] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    const fetchFeaturedCategories = async () => {
+      try {
+        setLoading(true);
+        console.log('Fetching featured categories...');
+        const allCategories = await categoryApi.getAll();
+        console.log('Received categories for featured section:', allCategories);
+        
+        // Filter to get only our featured categories
+        const featured = allCategories
+          .filter(cat => FEATURED_CATEGORIES.includes(cat.slug))
+          .map(cat => ({
+            id: cat.id,
+            name: cat.name,
+            slug: cat.slug,
+            recipe_count: cat.recipe_count || 0,
+            image: `${cat.slug}.jpg` // Use slug-based image naming pattern
+          }));
+        
+        console.log('Filtered featured categories:', featured);
+        setFeaturedItems(featured);
+        setError(null);
+      } catch (err) {
+        console.error('Error fetching featured categories:', err);
+        setError('Failed to load featured categories: ' + (err instanceof Error ? err.message : String(err)));
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchFeaturedCategories();
+  }, []);
+
+  // Handle loading and error states
+  if (loading) {
+    return (
+      <section className="py-12 bg-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">Featured Categories</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+            {[...Array(4)].map((_, i) => (
+              <div key={i} className="bg-gray-100 p-4 rounded-lg animate-pulse flex flex-col items-center justify-center" style={{ height: '250px' }}>
+                <div className="w-full h-32 bg-gray-200 rounded mb-4"></div>
+                <div className="h-6 bg-gray-200 rounded w-3/4 mb-4"></div>
+                <div className="h-4 bg-gray-200 rounded w-1/2"></div>
+              </div>
+            ))}
+          </div>
+        </div>
+      </section>
+    );
+  }
+
+  if (error) {
+    return (
+      <section className="py-12 bg-white">
+        <div className="container mx-auto px-4">
+          <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">Featured Categories</h2>
+          <div className="text-center py-8">
+            <p className="text-red-500">{error}</p>
+            <button 
+              onClick={() => window.location.reload()} 
+              className="mt-4 px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      </section>
+    );
+  }
+
   return (
-    <section className="py-10 bg-white">
+    <section className="py-12 bg-white">
       <div className="container mx-auto px-4">
+        <h2 className="text-3xl font-bold text-gray-800 mb-8 text-center">Featured Categories</h2>
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
-          {featuredItems.map((item) => (
-            <div key={item.id} className="relative group">
-              <div className="relative h-96 md:h-80 overflow-hidden">
-                {/* Placeholder for image loading */}
-                <div className="absolute inset-0 bg-gray-200 animate-pulse" />
-                
-                <Image
-                  src={item.image}
-                  alt={item.title}
-                  fill
-                  className="object-cover group-hover:scale-105 transition-transform duration-500"
-                  sizes="(max-width: 768px) 100vw, (max-width: 1024px) 50vw, 25vw"
-                />
-                
-                {/* Overlay */}
-                <div className="absolute inset-0 bg-black opacity-30 group-hover:opacity-20 transition-opacity" />
-              </div>
-              
-              {/* Button at the bottom */}
-              <div className="absolute bottom-10 w-full flex justify-center">
-                <Link
-                  href={item.href}
-                  className="bg-amber-500 text-white px-8 py-3 font-bold text-center tracking-wider hover:bg-amber-600 transition-colors"
-                >
-                  {item.title}
-                </Link>
-              </div>
+          {featuredItems.length > 0 ? (
+            featuredItems.map((item) => (
+              <Link 
+                key={item.slug} 
+                href={`/recipes/category/${item.slug}`}
+                className="bg-white rounded-lg overflow-hidden shadow-md hover:shadow-lg transition-shadow duration-300"
+              >
+                <div className="h-48 overflow-hidden relative">
+                  <Image 
+                    src={getImageUrl(item.image)} 
+                    alt={item.name}
+                    fill
+                    className="object-cover"
+                    onError={(e) => {
+                      e.currentTarget.src = getImageUrl('default-category.jpg');
+                    }}
+                  />
+                </div>
+                <div className="p-4">
+                  <h3 className="text-xl font-bold text-gray-800 mb-2">{item.name}</h3>
+                  <p className="text-gray-600">{item.recipe_count} Recipes</p>
+                </div>
+              </Link>
+            ))
+          ) : (
+            <div className="col-span-4 text-center py-8">
+              <p className="text-gray-500">No featured categories found</p>
             </div>
-          ))}
+          )}
         </div>
       </div>
     </section>
