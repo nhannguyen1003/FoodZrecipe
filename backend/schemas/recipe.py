@@ -1,6 +1,6 @@
 # Pydantic models for recipe data validation
-from pydantic import BaseModel
-from typing import List, Optional, Dict, Any
+from pydantic import BaseModel, Field
+from typing import List, Optional, Dict, Any, Union
 from datetime import datetime
 from backend.schemas.category import CategoryResponse
 
@@ -8,7 +8,7 @@ class RecipeBase(BaseModel):
     title: str
     description: Optional[str] = None
     ingredients: List[str]
-    instructions: str  # Changed from List[str] to str to match the single-block format
+    instructions: Union[str, List[str]] = Field(...)  # Accept either string or list of strings
     image_url: Optional[str] = None
     image_name: Optional[str] = None  # Added to support Image_Name
     categories: Optional[List[str]] = None  # Legacy field
@@ -27,7 +27,7 @@ class RecipeUpdate(BaseModel):
     title: Optional[str] = None
     description: Optional[str] = None
     ingredients: Optional[List[str]] = None
-    instructions: Optional[str] = None  # Changed from List[str] to str
+    instructions: Optional[Union[str, List[str]]] = None  # Allow both formats
     image_url: Optional[str] = None
     image_name: Optional[str] = None  # Added
     categories: Optional[List[str]] = None  # Legacy field
@@ -42,23 +42,32 @@ class RecipeUpdate(BaseModel):
 
 class RecipeResponse(RecipeBase):
     id: int
-    user_id: int
+    user_id: Optional[int] = None  # Changed to Optional to handle null values
     created_at: datetime
     category_relations: Optional[List[CategoryResponse]] = None
     
     class Config:
-        orm_mode = True
+        from_attributes = True  # Updated from orm_mode for Pydantic v2
         
 class RecipeInternalResponse(RecipeResponse):
     """Internal schema with LSH fields - only used by admin dashboard"""
+    # Original LSH fields
     text_feature_vector: Optional[List[float]] = None
     text_hash_buckets: Optional[List[int]] = None
     image_feature_vector: Optional[List[float]] = None
     image_hash_buckets: Optional[List[int]] = None
     combined_hash_buckets: Optional[List[int]] = None
     
+    # Multi-field LSH fields
+    title_feature_vector: Optional[List[float]] = None
+    ingredients_feature_vector: Optional[List[float]] = None
+    instructions_feature_vector: Optional[List[float]] = None
+    title_hash_buckets: Optional[List[int]] = None
+    ingredients_hash_buckets: Optional[List[int]] = None
+    instructions_hash_buckets: Optional[List[int]] = None
+    
     class Config:
-        orm_mode = True
+        from_attributes = True  # Updated from orm_mode for Pydantic v2
 
 class RecipeSearchQuery(BaseModel):
     query: str

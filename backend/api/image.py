@@ -14,7 +14,7 @@ from config import settings
 router = APIRouter()
 
 # Create upload directory if it doesn't exist
-os.makedirs(settings.UPLOAD_DIR, exist_ok=True)
+os.makedirs(settings.IMAGE_UPLOAD_DIR, exist_ok=True)
 
 # Valid image types
 VALID_IMAGE_TYPES = ["jpeg", "jpg", "png", "gif"]
@@ -52,7 +52,7 @@ async def upload_image(
     
     # Generate unique filename to prevent collisions
     unique_filename = f"{current_user.id}_{uuid.uuid4().hex}{file_extension}"
-    image_path = os.path.join(settings.UPLOAD_DIR, unique_filename)
+    image_path = os.path.join(settings.IMAGE_UPLOAD_DIR, unique_filename)
     
     # Save the file
     with open(image_path, "wb") as buffer:
@@ -72,7 +72,7 @@ async def upload_image(
     # Return relative path for database storage
     return {
         "filename": unique_filename,
-        "image_url": image_path,
+        "image_url": f"/food-images/{unique_filename}",  # Return path relative to API root
         "content_type": f"image/{image_type}"
     }
 
@@ -84,7 +84,7 @@ async def get_image(
     """
     Get an image by filename
     """
-    image_path = os.path.join(settings.UPLOAD_DIR, filename)
+    image_path = os.path.join(settings.IMAGE_UPLOAD_DIR, filename)
     
     # Check if file exists
     if not os.path.exists(image_path):
@@ -123,7 +123,7 @@ async def delete_image(
             detail="Not authorized to delete this image"
         )
     
-    image_path = os.path.join(settings.UPLOAD_DIR, filename)
+    image_path = os.path.join(settings.IMAGE_UPLOAD_DIR, filename)
     
     # Check if file exists
     if not os.path.exists(image_path):

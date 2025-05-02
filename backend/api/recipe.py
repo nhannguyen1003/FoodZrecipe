@@ -102,7 +102,7 @@ async def create_recipe(
     
     # Create recipe object
     recipe_in = RecipeCreate(**recipe_data)
-    recipe = recipe_repository.create(db, obj_in=recipe_in, user_id=current_user.id)
+    recipe = recipe_repository.create_with_user_id(db, obj_in=recipe_in, user_id=current_user.id)
     
     # Generate feature vectors and LSH hashes for the new recipe
     recipe_repository.update_feature_vectors(db, recipe_id=recipe.id)
@@ -138,7 +138,7 @@ async def import_recipe(
     
     # Create recipe object
     recipe_in = RecipeCreate(**transformed_data)
-    recipe = recipe_repository.create(db, obj_in=recipe_in, user_id=current_user.id)
+    recipe = recipe_repository.create_with_user_id(db, obj_in=recipe_in, user_id=current_user.id)
     
     # Generate feature vectors and LSH hashes for the new recipe
     recipe_repository.update_feature_vectors(db, recipe_id=recipe.id)

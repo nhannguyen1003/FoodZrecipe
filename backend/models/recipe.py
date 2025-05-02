@@ -44,6 +44,14 @@ class Recipe(Base):
     # Combined hash buckets for hybrid search
     combined_hash_buckets = Column(ARRAY(Integer), nullable=True)
     
+    # Field-specific LSH-related fields for multi-field search
+    title_feature_vector = Column(PG_ARRAY(Float), nullable=True)
+    ingredients_feature_vector = Column(PG_ARRAY(Float), nullable=True)
+    instructions_feature_vector = Column(PG_ARRAY(Float), nullable=True)
+    title_hash_buckets = Column(ARRAY(Integer), nullable=True)
+    ingredients_hash_buckets = Column(ARRAY(Integer), nullable=True)
+    instructions_hash_buckets = Column(ARRAY(Integer), nullable=True)
+    
     # Additional field for raw JSON data
     raw_data = Column(JSONB, nullable=True)  # Store the original JSON data
     
@@ -54,6 +62,9 @@ class Recipe(Base):
         Index('idx_recipe_text_hash', 'text_hash_buckets', postgresql_using='gin'),
         Index('idx_recipe_image_hash', 'image_hash_buckets', postgresql_using='gin'),
         Index('idx_recipe_combined_hash', 'combined_hash_buckets', postgresql_using='gin'),
+        Index('idx_recipe_title_hash', 'title_hash_buckets', postgresql_using='gin'),
+        Index('idx_recipe_ingredients_hash', 'ingredients_hash_buckets', postgresql_using='gin'),
+        Index('idx_recipe_instructions_hash', 'instructions_hash_buckets', postgresql_using='gin'),
     )
     
     def __repr__(self):
