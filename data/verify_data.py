@@ -8,6 +8,18 @@ import logging
 import psycopg2
 from dotenv import load_dotenv
 
+# Add project root to path to import backend modules
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+# Import the LSH constants
+from backend.utils.lsh_utils import (
+    EMBEDDING_DIM_TITLE,
+    EMBEDDING_DIM_INGREDIENTS,
+    EMBEDDING_DIM_INSTRUCTIONS,
+    EMBEDDING_DIM_TEXT,
+    EMBEDDING_DIM_IMAGE
+)
+
 # Configure logging
 logging.basicConfig(
     level=logging.INFO,
@@ -55,7 +67,7 @@ def verify_data():
             avg_labels = label_count / recipe_count
             logger.info(f"Average labels per recipe: {avg_labels:.2f}")
         
-        # Check sample recipes with their hash bucket counts
+        # Check sample recipes with their hash bucket counts, including image hash buckets
         cursor.execute("""
             SELECT 
                 id, 
@@ -63,7 +75,9 @@ def verify_data():
                 array_length(title_hash_buckets, 1) as title_hash_count,
                 array_length(ingredients_hash_buckets, 1) as ingredients_hash_count,
                 array_length(instructions_hash_buckets, 1) as instructions_hash_count,
-                array_length(text_hash_buckets, 1) as text_hash_count
+                array_length(text_hash_buckets, 1) as text_hash_count,
+                array_length(image_hash_buckets, 1) as image_hash_count,
+                image_name
             FROM recipe 
             LIMIT 5
         """)
@@ -75,32 +89,72 @@ def verify_data():
             logger.info(f"  - Ingredients hash buckets: {row[3]}")
             logger.info(f"  - Instructions hash buckets: {row[4]}")
             logger.info(f"  - Text hash buckets: {row[5]}")
+            logger.info(f"  - Image hash buckets: {row[6]}")
+            logger.info(f"  - Image name: {row[7]}")
         
-        # Check for missing hash buckets
+        # Check for missing hash buckets, including image hash buckets
         cursor.execute("""
             SELECT COUNT(*) FROM recipe
             WHERE 
                 array_length(title_hash_buckets, 1) IS NULL OR
                 array_length(ingredients_hash_buckets, 1) IS NULL OR
                 array_length(instructions_hash_buckets, 1) IS NULL OR
-                array_length(text_hash_buckets, 1) IS NULL
+                array_length(text_hash_buckets, 1) IS NULL OR
+                array_length(image_hash_buckets, 1) IS NULL
         """)
         
         missing_hash_count = cursor.fetchone()[0]
         logger.info(f"Recipes with missing hash buckets: {missing_hash_count}")
         
-        # Check for missing feature vectors
+        # Check for recipes with non-empty image hash buckets
         cursor.execute("""
             SELECT COUNT(*) FROM recipe
+            WHERE array_length(image_hash_buckets, 1) > 0
+        """)
+        
+        with_image_hash_count = cursor.fetchone()[0]
+        logger.info(f"Recipes with non-empty image hash buckets: {with_image_hash_count}")
+        
+        # Check for missing feature vectors, with correct dimensions based on constants
+        cursor.execute(f"""
+            SELECT COUNT(*) FROM recipe
             WHERE 
-                array_length(title_feature_vector, 1) <> 64 OR
-                array_length(ingredients_feature_vector, 1) <> 128 OR
-                array_length(instructions_feature_vector, 1) <> 256 OR
-                array_length(text_feature_vector, 1) <> 128
+                array_length(title_feature_vector, 1) <> {EMBEDDING_DIM_TITLE} OR
+                array_length(ingredients_feature_vector, 1) <> {EMBEDDING_DIM_INGREDIENTS} OR
+                array_length(instructions_feature_vector, 1) <> {EMBEDDING_DIM_INSTRUCTIONS} OR
+                array_length(text_feature_vector, 1) <> {EMBEDDING_DIM_TEXT} OR
+                array_length(image_feature_vector, 1) <> {EMBEDDING_DIM_IMAGE}
         """)
         
         invalid_vector_count = cursor.fetchone()[0]
         logger.info(f"Recipes with invalid feature vector dimensions: {invalid_vector_count}")
+        
+        # Detailed breakdown of invalid vector dimensions
+        dimension_checks = [
+            ("title_feature_vector", EMBEDDING_DIM_TITLE),
+            ("ingredients_feature_vector", EMBEDDING_DIM_INGREDIENTS),
+            ("instructions_feature_vector", EMBEDDING_DIM_INSTRUCTIONS),
+            ("text_feature_vector", EMBEDDING_DIM_TEXT),
+            ("image_feature_vector", EMBEDDING_DIM_IMAGE)
+        ]
+        
+        for field, expected_dim in dimension_checks:
+            cursor.execute(f"""
+                SELECT COUNT(*) FROM recipe
+                WHERE array_length({field}, 1) <> {expected_dim}
+            """)
+            invalid_count = cursor.fetchone()[0]
+            if invalid_count > 0:
+                logger.warning(f"Found {invalid_count} recipes with invalid {field} dimension (expected {expected_dim})")
+        
+        # Check count of recipes with image names that have corresponding image hash buckets
+        cursor.execute("""
+            SELECT COUNT(*) FROM recipe
+            WHERE image_name IS NOT NULL AND array_length(image_hash_buckets, 1) > 0
+        """)
+        
+        with_image_and_hash_count = cursor.fetchone()[0]
+        logger.info(f"Recipes with both image name and image hash buckets: {with_image_and_hash_count}")
         
         # Close the connection
         conn.close()

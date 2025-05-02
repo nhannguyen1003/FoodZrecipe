@@ -21,7 +21,8 @@ from backend.utils.lsh_utils import (
     EMBEDDING_DIM_TITLE,
     EMBEDDING_DIM_INGREDIENTS,
     EMBEDDING_DIM_INSTRUCTIONS,
-    EMBEDDING_DIM_TEXT
+    EMBEDDING_DIM_TEXT,
+    EMBEDDING_DIM_IMAGE
 )
 
 # Configure logging
@@ -171,7 +172,9 @@ def create_recipe_table(conn):
                 instructions_feature_vector FLOAT[{EMBEDDING_DIM_INSTRUCTIONS}],
                 instructions_hash_buckets INTEGER[],
                 text_feature_vector FLOAT[{EMBEDDING_DIM_TEXT}],
-                text_hash_buckets INTEGER[]
+                text_hash_buckets INTEGER[],
+                image_feature_vector FLOAT[{EMBEDDING_DIM_IMAGE}],
+                image_hash_buckets INTEGER[]
             )
         """)
         
@@ -265,7 +268,8 @@ def setup_schema(conn, force_recreate=False):
         'title_feature_vector', 'title_hash_buckets',
         'ingredients_feature_vector', 'ingredients_hash_buckets',
         'instructions_feature_vector', 'instructions_hash_buckets',
-        'text_feature_vector', 'text_hash_buckets'
+        'text_feature_vector', 'text_hash_buckets',
+        'image_feature_vector', 'image_hash_buckets'
     ]
     
     recipe_label_columns = ['recipe_id', 'label']

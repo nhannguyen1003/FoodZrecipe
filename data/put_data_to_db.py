@@ -20,7 +20,8 @@ from backend.utils.lsh_utils import (
     EMBEDDING_DIM_TITLE, 
     EMBEDDING_DIM_INGREDIENTS,
     EMBEDDING_DIM_INSTRUCTIONS,
-    EMBEDDING_DIM_TEXT
+    EMBEDDING_DIM_TEXT,
+    EMBEDDING_DIM_IMAGE
 )
 
 # Configure logging
@@ -37,7 +38,8 @@ def verify_database_schema(conn) -> bool:
         "title_feature_vector", "title_hash_buckets",
         "ingredients_feature_vector", "ingredients_hash_buckets",
         "instructions_feature_vector", "instructions_hash_buckets",
-        "text_feature_vector", "text_hash_buckets"
+        "text_feature_vector", "text_hash_buckets",
+        "image_feature_vector", "image_hash_buckets"
     ]
     
     cursor = conn.cursor()
@@ -132,6 +134,18 @@ def validate_vectors(recipe: Dict[str, Any]) -> Dict[str, Any]:
         recipe['text_feature_vector'] = [0.0] * EMBEDDING_DIM_TEXT
         logger.warning(f"Missing text feature vector for recipe '{recipe.get('Title', 'unknown')}'")
     
+    # Validate image feature vector
+    if 'image_feature_vector' in recipe:
+        if len(recipe['image_feature_vector']) < EMBEDDING_DIM_IMAGE:
+            # Pad with zeros
+            recipe['image_feature_vector'].extend([0.0] * (EMBEDDING_DIM_IMAGE - len(recipe['image_feature_vector'])))
+        elif len(recipe['image_feature_vector']) > EMBEDDING_DIM_IMAGE:
+            # Truncate
+            recipe['image_feature_vector'] = recipe['image_feature_vector'][:EMBEDDING_DIM_IMAGE]
+    else:
+        recipe['image_feature_vector'] = [0.0] * EMBEDDING_DIM_IMAGE
+        logger.warning(f"Missing image feature vector for recipe '{recipe.get('Title', 'unknown')}'")
+    
     # Ensure hash buckets exist
     if 'title_hash_buckets' not in recipe:
         recipe['title_hash_buckets'] = []
@@ -148,6 +162,11 @@ def validate_vectors(recipe: Dict[str, Any]) -> Dict[str, Any]:
     if 'text_hash_buckets' not in recipe:
         recipe['text_hash_buckets'] = []
         logger.warning(f"Missing text hash buckets for recipe '{recipe.get('Title', 'unknown')}'")
+    
+    # Ensure hash buckets exist for image
+    if 'image_hash_buckets' not in recipe:
+        recipe['image_hash_buckets'] = []
+        logger.warning(f"Missing image hash buckets for recipe '{recipe.get('Title', 'unknown')}'")
     
     return recipe
 
@@ -199,8 +218,9 @@ def load_recipes_from_json(conn, json_file_path):
                             user_id, text_feature_vector, text_hash_buckets,
                             title_feature_vector, title_hash_buckets,
                             ingredients_feature_vector, ingredients_hash_buckets,
-                            instructions_feature_vector, instructions_hash_buckets
-                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+                            instructions_feature_vector, instructions_hash_buckets,
+                            image_feature_vector, image_hash_buckets
+                        ) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
                         RETURNING id
                     """, (
                         recipe.get('Title', ''),
@@ -216,7 +236,9 @@ def load_recipes_from_json(conn, json_file_path):
                         recipe.get('ingredients_feature_vector', []),
                         recipe.get('ingredients_hash_buckets', []),
                         recipe.get('instructions_feature_vector', []),
-                        recipe.get('instructions_hash_buckets', [])
+                        recipe.get('instructions_hash_buckets', []),
+                        recipe.get('image_feature_vector', []),
+                        recipe.get('image_hash_buckets', [])
                     ))
                     
                     recipe_id = cursor.fetchone()[0]
