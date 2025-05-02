@@ -19,7 +19,7 @@
 body {
   color: rgb(var(--foreground-rgb));
   background: rgb(var(--background-start-rgb));
-  font-family: var(--font-geist-sans);
+  font-family: var(--font-inter);
 }
 
 /* Custom styles for the recipe website */

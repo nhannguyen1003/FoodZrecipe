@@ -23,6 +23,7 @@ module.exports = {
         brandPurple: '#734061',
       },
       fontFamily: {
+        sans: ['var(--font-inter)'],
         handwriting: ['var(--font-dancing-script)'],
       },
     },

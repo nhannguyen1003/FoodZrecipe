@@ -58,4 +58,15 @@ ehthumbs.db
 Thumbs.db
 
 #exclude data
-data/archive/
+data/db/Food Images/
+.venv/
+
+# Python cache files
+__pycache__/
+*.py[cod]
+*$py.class
+
+# pytest cache
+.pytest_cache/
+
+backend/static/food-images/
