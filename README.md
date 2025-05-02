@@ -2,6 +2,42 @@
 
 A recipe application with text and image-based search capabilities.
 
+## Installation
+
+Follow these steps to set up and run the application:
+
+### 1. Start Docker
+```bash
+cd docker 
+docker-compose up -d 
+cd .. 
+```
+
+### 2. Initialize Data
+```bash
+cd data
+python get_data_from_kaggle.py
+# The next step can be skipped as it takes a long time, use direct JSON file for demo
+python get-transformed_data.py 
+python get_data_lsh.py # to get hash values
+python get_schemas_to_db.py # to create tables
+python put_data_to_db.py # to insert data into database
+cd ..
+```
+
+### 3. Start Backend
+```bash
+cd backend 
+python main.py
+```
+
+### 4. Start Frontend
+In another terminal:
+```bash
+cd frontend 
+npm run dev
+```
+
 ## Project Structure
 
 The application follows a clean architecture with clear separation of concerns:
