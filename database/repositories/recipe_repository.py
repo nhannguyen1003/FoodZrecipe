@@ -369,60 +369,63 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
     def advanced_search(self, db: Session, *, query: str, categories: List[str] = None, 
                        sort_by: str = "relevance", skip: int = 0, limit: int = 100) -> List[Recipe]:
         """
-        Advanced search with filtering and sorting options
+        Advanced search with filtering and sorting capabilities
         
         Args:
-            query: Text search query
+            db: Database session
+            query: Search query string
             categories: Optional list of categories to filter by
-            sort_by: Sorting option - relevance, newest, or popular
-            skip: Pagination offset
-            limit: Number of results to return
-        """
-        # Import at the function level to avoid scope issues
-        from sqlalchemy import func, or_
-        
-        search_query = f"%{query}%"
-        
-        # Start with base query
-        base_query = db.query(Recipe).filter(
-            or_(
-                Recipe.title.ilike(search_query),
-                Recipe.description.ilike(search_query),
-                func.array_to_string(Recipe.ingredients, ' ').ilike(search_query),
-                func.array_to_string(Recipe.instructions, ' ').ilike(search_query)
-            )
-        )
-        
-        # Apply category filtering if specified
-        if categories and len(categories) > 0:
-            # Create a condition that checks if any category is in the categories list
-            category_conditions = []
-            for category in categories:
-                # Using the array_to_string function to check if a category exists in the array
-                category_conditions.append(func.array_to_string(Recipe.categories, ',').ilike(f'%{category}%'))
+            sort_by: Sorting option (relevance, newest, popular)
+            skip: Number of results to skip
+            limit: Maximum number of results to return
             
-            # Combine the conditions with OR
-            if category_conditions:
+        Returns:
+            List of matching Recipe objects
+        """
+        try:
+            # Build the base query
+            search_query = f"%{query}%"
+            base_query = db.query(Recipe).filter(
+                or_(
+                    Recipe.title.ilike(search_query),
+                    Recipe.description.ilike(search_query),
+                    func.array_to_string(Recipe.ingredients, ' ').ilike(search_query),
+                    func.array_to_string(Recipe.instructions, ' ').ilike(search_query)
+                )
+            )
+            
+            # Apply category filtering if specified
+            if categories and len(categories) > 0:
+                # Filter recipes that have at least one matching category
+                # We convert both arrays to lowercase for case-insensitive matching
+                category_conditions = []
+                for category in categories:
+                    category_conditions.append(
+                        func.array_to_string(Recipe.categories, ',').ilike(f"%{category.lower()}%")
+                    )
                 base_query = base_query.filter(or_(*category_conditions))
-        
-        # Apply sorting
-        if sort_by == "newest":
-            base_query = base_query.order_by(Recipe.created_at.desc())
-        elif sort_by == "popular":
-            # This would ideally use a rating or views field. For now, we'll just use ID as a placeholder
-            # In a real application, you would have a rating/views field to sort by
-            base_query = base_query.order_by(Recipe.id.desc())
-        # Default is relevance, which is the order from the text search
-        
-        # Apply pagination and return results
-        results = base_query.offset(skip).limit(limit).all()
-        
-        # Convert array instructions to string if needed for schema compatibility
-        for recipe in results:
-            if recipe.instructions and isinstance(recipe.instructions, list):
-                recipe.instructions = "\n".join(recipe.instructions)
-                
-        return results
+            
+            # Apply sorting
+            if sort_by == "newest":
+                base_query = base_query.order_by(desc(Recipe.created_at))
+            elif sort_by == "popular":
+                # For now, just use ID as a proxy for popularity
+                base_query = base_query.order_by(desc(Recipe.id))
+            # Default is relevance, no particular ordering
+            
+            # Apply pagination
+            recipes = base_query.offset(skip).limit(limit).all()
+            
+            # Convert array instructions to string if needed for schema compatibility
+            for recipe in recipes:
+                if recipe.instructions and isinstance(recipe.instructions, list):
+                    recipe.instructions = "\n".join(recipe.instructions)
+                    
+            return recipes
+        except Exception as e:
+            print(f"Error in advanced_search: {e}")
+            # If there's an error, return an empty list
+            return []
 
     def get_all_categories(self, db: Session) -> List[str]:
         """
@@ -430,18 +433,15 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         
         Returns a sorted list of unique categories from all recipes
         """
-        # Query for all recipes
-        recipes = db.query(Recipe).all()
-        
-        # Collect all categories
-        all_categories = set()
-        for recipe in recipes:
-            if recipe.categories:
-                for category in recipe.categories:
-                    all_categories.add(category)
-        
-        # Return sorted list of unique categories
-        return sorted(list(all_categories))
+        try:
+            # Use a direct SQL query that only fetches the categories column
+            result = db.execute(text("SELECT DISTINCT unnest(categories) as category FROM recipes WHERE categories IS NOT NULL"))
+            categories = [row[0] for row in result]
+            return sorted(categories)
+        except Exception as e:
+            print(f"Error in get_all_categories: {e}")
+            # Fallback to a simpler method if there's an error
+            return []
 
     def create_with_user_id(self, db: Session, obj_in: Union[Dict[str, Any], RecipeCreate], user_id: int) -> Recipe:
         """

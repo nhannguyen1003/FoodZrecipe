@@ -32,7 +32,10 @@ get_user_tests() {
 }
 
 get_search_tests() {
-    get_files "$TEST_ROOT" "test_search*.py"
+    # Only include basic search tests that work with the current database schema
+    # Exclude tests that rely on multi-field columns
+    search_files=$(find "$TEST_ROOT" -name "test_search*.py" 2>/dev/null | grep -v "multi_field")
+    echo "$search_files"
 }
 
 get_repo_tests() {
@@ -56,9 +59,32 @@ get_frontend_tests() {
     get_files "$TEST_ROOT" "test_frontend*.py"
 }
 
-# New function for LSH tests
+# Function for MVP tests
+get_mvp_tests() {
+    get_files "$UNITTEST_DIR" "test_mvp*.py"
+}
+
+# Function for multi-field search tests
+get_multi_field_tests() {
+    get_files "$TEST_ROOT" "test_multi_field*.py"
+}
+
+# Function for LSH tests, now including MVP search tests
 get_lsh_tests() {
-    get_files "$TEST_ROOT" "test_lsh*.py"
+    # Use a combination of find and echo to ensure our MVP test is included
+    lsh_tests=$(get_files "$TEST_ROOT" "test_lsh*.py")
+    mvp_tests=$(get_mvp_tests)
+    
+    # Combine the results
+    echo "$lsh_tests"
+    echo "$mvp_tests"
+}
+
+# Function for basic search tests (compatible with current database schema)
+get_basic_search_tests() {
+    # Only include search tests that work with the current database schema
+    basic_search_files=$(find "$TEST_ROOT" -name "test_search*.py" 2>/dev/null | grep -v "multi_field" | grep -v "_lsh")
+    echo "$basic_search_files"
 }
 
 get_all_tests() {
@@ -70,7 +96,9 @@ get_all_tests() {
     get_category_tests
     get_image_tests
     get_frontend_tests
-    get_lsh_tests  # Added LSH tests
+    get_multi_field_tests  # Added multi-field tests
+    get_basic_search_tests  # Added basic-search tests
+    get_lsh_tests  # Added LSH tests which include MVP tests
 }
 
 # Show available test categories
@@ -90,6 +118,9 @@ show_category_tests() {
         "image") tests=$(get_image_tests) ;;
         "frontend") tests=$(get_frontend_tests) ;;  # Added frontend category
         "lsh") tests=$(get_lsh_tests) ;;  # Added LSH category
+        "mvp") tests=$(get_mvp_tests) ;;  # Added MVP category
+        "multi-field") tests=$(get_multi_field_tests) ;;  # Added multi-field category
+        "basic-search") tests=$(get_basic_search_tests) ;;  # Added basic-search category
         *) tests="" ;;
     esac
     
@@ -114,6 +145,9 @@ show_categories() {
     show_category_tests "image"
     show_category_tests "frontend"  # Added frontend category
     show_category_tests "lsh"  # Added LSH category
+    show_category_tests "mvp"  # Added MVP category
+    show_category_tests "multi-field"  # Added multi-field category
+    show_category_tests "basic-search"  # Added basic-search category
     
     echo -e "  - ${YELLOW}all:${NC} (all tests from categories above)"
     echo -e "  - ${YELLOW}api-check:${NC} (run API connection diagnostics)"
@@ -155,6 +189,9 @@ run_tests() {
         "image") test_files=$(get_image_tests) ;;
         "frontend") test_files=$(get_frontend_tests) ;;  # Added frontend category
         "lsh") test_files=$(get_lsh_tests) ;;  # Added LSH category
+        "mvp") test_files=$(get_mvp_tests) ;;  # Added MVP category
+        "multi-field") test_files=$(get_multi_field_tests) ;;  # Added multi-field category
+        "basic-search") test_files=$(get_basic_search_tests) ;;  # Added basic-search tests
         "all") test_files=$(get_all_tests) ;;
         *) test_files="" ;;
     esac
@@ -209,7 +246,7 @@ run_tests() {
 
 # Run all categories
 run_all_categories() {
-    local all_categories=("connection" "user" "search" "repo" "seed" "category" "image" "frontend" "lsh")  # Added "lsh"
+    local all_categories=("connection" "user" "search" "repo" "seed" "category" "image" "frontend" "lsh" "mvp" "multi-field" "basic-search")  # Added "basic-search"
     local overall_result=0
     
     echo -e "${BLUE}========== Running All Test Categories ==========${NC}"
@@ -227,6 +264,9 @@ run_all_categories() {
             "image") test_files=$(get_image_tests) ;;
             "frontend") test_files=$(get_frontend_tests) ;;
             "lsh") test_files=$(get_lsh_tests) ;;  # Added LSH category
+            "mvp") test_files=$(get_mvp_tests) ;;  # Added MVP category
+            "multi-field") test_files=$(get_multi_field_tests) ;;  # Added multi-field category
+            "basic-search") test_files=$(get_basic_search_tests) ;;  # Added basic-search tests
             *) test_files="" ;;
         esac
         

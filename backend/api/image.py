@@ -72,7 +72,7 @@ async def upload_image(
     # Return relative path for database storage
     return {
         "filename": unique_filename,
-        "image_url": f"/food-images/{unique_filename}",  # Return path relative to API root
+        "image_url": f"/static/food-images/{unique_filename}",  # Return path relative to API root
         "content_type": f"image/{image_type}"
     }
 

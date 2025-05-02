@@ -47,12 +47,14 @@ class TestImageAPI:
     @pytest.fixture(scope="class")
     def temp_upload_dir(self):
         """Create a temporary directory for test uploads"""
-        original_upload_dir = settings.UPLOAD_DIR
+        original_upload_dir = settings.IMAGE_UPLOAD_DIR
         with tempfile.TemporaryDirectory() as tmp_dir:
-            settings.UPLOAD_DIR = tmp_dir
+            settings.IMAGE_UPLOAD_DIR = tmp_dir
+            # Ensure the directory exists
             os.makedirs(tmp_dir, exist_ok=True)
             yield tmp_dir
-            settings.UPLOAD_DIR = original_upload_dir
+            # Restore original setting
+            settings.IMAGE_UPLOAD_DIR = original_upload_dir
     
     @pytest.fixture
     def auth_headers(self):

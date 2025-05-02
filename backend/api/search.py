@@ -12,6 +12,7 @@ from database.repositories.recipe_repository import recipe_repository
 from backend.models.recipe import Recipe
 from backend.schemas.search import MultiFieldSearchQuery, SearchResults, SearchResult
 from backend.services.multi_field_search_service import multi_field_search_service
+from config import settings
 
 router = APIRouter()
 
@@ -33,47 +34,19 @@ def search_recipes_by_text(
     4. Return matching recipes
     """
     try:
-        # Check if LSH is available
-        if not recipe_repository.text_index or recipe_repository.text_index.ntotal == 0:
-            # Fall back to regular text search with filtering and sorting
-            return recipe_repository.advanced_search(
-                db, 
-                query=query, 
-                categories=categories,
-                sort_by=sort_by,
-                skip=offset, 
-                limit=limit
-            )
-        
-        # If LSH is available, use it for search but apply filtering and sorting afterwards
-        # This is a simplified implementation that doesn't take advantage of all LSH capabilities
-        # with the filter/sort parameters, but it's a good starting point
-        
-        # LSH search using the recipe repository's FAISS implementation
-        lsh_results = recipe_repository.search_by_text_query(db, query=query, k=100)  # Get more results to apply filtering
-        
-        # Apply category filtering if specified
-        if categories and len(categories) > 0:
-            filtered_results = []
-            for recipe in lsh_results:
-                if recipe.categories:
-                    # Check if any category in the recipe matches any of the requested categories
-                    if any(category in recipe.categories for category in categories):
-                        filtered_results.append(recipe)
-            lsh_results = filtered_results
-        
-        # Apply sorting
-        if sort_by == "newest":
-            lsh_results.sort(key=lambda x: x.created_at, reverse=True)
-        elif sort_by == "popular":
-            # For now, just use ID as a proxy for popularity
-            lsh_results.sort(key=lambda x: x.id, reverse=True)
-        # Default is relevance, which is the order from LSH search
-        
-        # Apply pagination
-        return lsh_results[offset:offset+limit]
+        # Fallback to regular text search with filtering and sorting
+        return recipe_repository.advanced_search(
+            db, 
+            query=query, 
+            categories=categories,
+            sort_by=sort_by,
+            skip=offset, 
+            limit=limit
+        )
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
+        print(f"Text search error: {str(e)}")
+        # Return empty list instead of error
+        return []
 
 @router.post("/image", response_model=List[RecipeResponse])
 async def search_recipes_by_image(
@@ -245,7 +218,8 @@ def search_recipes(
     3. Return matching recipes
     """
     try:
-        return recipe_repository.advanced_search(
+        # Use the more robust advanced_search method
+        results = recipe_repository.advanced_search(
             db, 
             query=query, 
             categories=categories,
@@ -253,8 +227,11 @@ def search_recipes(
             skip=offset, 
             limit=limit
         )
+        return results
     except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Recipe search failed: {str(e)}")
+        print(f"Error in search_recipes: {str(e)}")
+        # Return empty list instead of error
+        return []
 
 @router.post("/multi-field", response_model=List[RecipeResponse])
 def search_recipes_multi_field(

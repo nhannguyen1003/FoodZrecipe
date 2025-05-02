@@ -21,7 +21,7 @@ STOPWORDS = {
 # Title-specific stopwords (common recipe qualifiers)
 TITLE_STOPWORDS = {
     'easy', 'quick', 'simple', 'best', 'homemade', 'delicious', 'healthy', 
-    'tasty', 'fast', 'favorite', 'perfect', 'ultimate', 'traditional'
+    'tasty', 'fast', 'favorite', 'perfect', 'ultimate', 'traditional', 'recipe'
 }
 
 # Ingredient measurement terms
