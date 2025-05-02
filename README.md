@@ -127,15 +127,6 @@ cd tests
 python -m pytest
 ```
 
-## Documentation
-
-The project includes various documentation:
-
-1. Recipe data model documentation
-2. API endpoint documentation
-3. LSH search algorithm documentation 
-4. Multi-field search implementation details
-5. [Multi-field search limitations](docs/multi_field_search_limitations.md) - Known limitations of the current MVP implementation
 
 ## License
 
