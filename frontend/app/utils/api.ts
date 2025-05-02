@@ -103,10 +103,9 @@ export const getRecipeImageUrl = (recipe: RecipeResponse): string => {
     return imageUrl;
   }
   
-  // If no image information is available, use a placeholder
-  const placeholderPath = `/placeholders/placeholder-recipe.jpg`;
-  console.log(`No image available for "${recipe.title}" (ID: ${recipe.id}), using placeholder`);
-  return placeholderPath;
+  // If no image information is available, return empty string
+  console.log(`No image available for "${recipe.title}" (ID: ${recipe.id})`);
+  return "";
 };
 
 // Function to format the recipe for the UI from API response
@@ -350,16 +349,8 @@ export const recipeApi = {
         return result;
       } catch (innerError) {
         clearTimeout(timeoutId);
-        
-        // If the search endpoint fails, try the text endpoint as fallback
-        console.log('Search endpoint failed, trying text endpoint as fallback');
-        try {
-          const textEndpointUrl = `/search/text?query=${encodeURIComponent(query)}`;
-          return await fetchApi<RecipeResponse[]>(textEndpointUrl);
-        } catch (textError) {
-          console.error('Text search endpoint also failed:', textError);
-          throw innerError; // Throw the original error
-        }
+        console.error('Search endpoint failed:', innerError);
+        throw innerError; // Don't try fallback, propagate the error
       }
     } catch (error) {
       console.error('Recipe search failed:', error);
@@ -369,6 +360,58 @@ export const recipeApi = {
         throw error;
       } else {
         throw new Error(`Search failed: ${JSON.stringify(error)}`);
+      }
+    }
+  },
+  
+  // Image search function
+  searchByImage: async (imageFile: File): Promise<RecipeResponse[]> => {
+    try {
+      console.log('Searching recipes by image upload');
+      
+      // Create FormData for multipart/form-data upload
+      const formData = new FormData();
+      formData.append('image', imageFile);
+      
+      // Upload the image to the backend search endpoint
+      const url = `/search/image`;
+      
+      // Log the request for debugging
+      console.log(`Image search API URL: ${url}`);
+      console.log(`Image file: ${imageFile.name}, size: ${imageFile.size}, type: ${imageFile.type}`);
+      
+      // Set up custom options for the fetch call
+      const options: RequestInit = {
+        method: 'POST',
+        body: formData,
+        // No need to set Content-Type header - browser sets it with boundary for FormData
+        // Add credentials if needed for cookies
+        credentials: 'include',
+      };
+      
+      // Use a longer timeout for image uploads (15 seconds)
+      const controller = new AbortController();
+      const signal = controller.signal;
+      options.signal = signal;
+      const timeoutId = setTimeout(() => controller.abort(), 15000);
+      
+      try {
+        const result = await fetchApi<RecipeResponse[]>(url, options);
+        clearTimeout(timeoutId);
+        return result;
+      } catch (innerError) {
+        clearTimeout(timeoutId);
+        console.error('Image search endpoint failed:', innerError);
+        throw innerError;
+      }
+    } catch (error) {
+      console.error('Image search failed:', error);
+      
+      // Add better error formatting
+      if (error instanceof Error) {
+        throw error;
+      } else {
+        throw new Error(`Image search failed: ${JSON.stringify(error)}`);
       }
     }
   }
@@ -407,15 +450,9 @@ export const categoryApi = {
         console.error('DEBUG: Categories search endpoint failed:', error);
       }
       
-      console.error('DEBUG: All category endpoints failed, returning hard-coded list');
-      // Return hard-coded categories as a last resort for debugging
-      return [
-        { id: 1, name: 'Breakfast', slug: 'breakfast', recipe_count: 100, description: '' },
-        { id: 2, name: 'Lunch', slug: 'lunch', recipe_count: 85, description: '' },
-        { id: 3, name: 'Dinner', slug: 'dinner', recipe_count: 120, description: '' },
-        { id: 4, name: 'Dessert', slug: 'dessert', recipe_count: 70, description: '' },
-        { id: 5, name: 'Vegetarian', slug: 'vegetarian', recipe_count: 55, description: '' }
-      ];
+      // Return empty array instead of fake data for debugging
+      console.error('DEBUG: All category endpoints failed, returning empty array');
+      return [];
     } catch (error) {
       console.error('DEBUG: Critical error in getAll categories:', error);
       throw error;

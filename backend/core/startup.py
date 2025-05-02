@@ -2,6 +2,7 @@ from sqlalchemy.orm import Session
 import logging
 import os
 import sys
+from pathlib import Path
 from database.session import SessionLocal
 from database.repositories.recipe_repository import recipe_repository
 from backend.services.lsh_service import lsh_service
@@ -21,6 +22,14 @@ def initialize_lsh_indices():
     try:
         db = SessionLocal()
         try:
+            # Check if there are recipes in the database
+            from backend.models.recipe import Recipe
+            recipe_count = db.query(Recipe).count()
+            
+            if recipe_count == 0:
+                logger.warning("No recipes found in database. LSH indices not initialized.")
+                return
+                
             # Initialize recipe repository's indices
             recipe_repository.load_faiss_indices(db)
             
@@ -47,6 +56,14 @@ def initialize_multi_field_search():
     try:
         db = SessionLocal()
         try:
+            # Check if there are recipes in the database
+            from backend.models.recipe import Recipe
+            recipe_count = db.query(Recipe).count()
+            
+            if recipe_count == 0:
+                logger.warning("No recipes found in database. Multi-field search indices not initialized.")
+                return
+                
             # Build multi-field search indices
             multi_field_search_service.initialize_indices()
             multi_field_search_service.build_indices(db)
@@ -87,6 +104,16 @@ def run_data_seeding_if_needed():
             if recipe_count == 0 or force_seed:
                 logger.info(f"Running data seeding (recipe_count={recipe_count}, force_seed={force_seed})")
                 
+                # Check if the sample_recipes_with_hashed.json file exists
+                data_dir = Path(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))) / "data" / "db"
+                sample_file = data_dir / "sample_recipes_with_hashed.json"
+                
+                if not sample_file.exists():
+                    logger.error(f"Sample recipes file not found at {sample_file}, seeding cannot be completed")
+                    return
+                    
+                logger.info(f"Found sample recipes file at {sample_file}")
+                
                 # Use the data initialization scripts
                 data_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "data")
                 
@@ -120,8 +147,9 @@ def init_app():
     
     Called when the FastAPI application starts
     """
-    # Run data seeding if needed
-    run_data_seeding_if_needed()
+    # Skip automatic data seeding (comment out to re-enable)
+    # run_data_seeding_if_needed()
+    logger.info("Automatic data seeding disabled - using manually initialized data")
     
     # Initialize FAISS LSH indices
     initialize_lsh_indices()

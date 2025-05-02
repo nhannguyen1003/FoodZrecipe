@@ -44,24 +44,97 @@ export default function SearchResults({ query, category, categoryDisplayName, li
       
       let data: RecipeResponse[] = [];
       
-      // Fetch recipes based on the mode (search query, category, or latest)
+      // Fetch recipes based on the mode (search query, category, or image)
       if (query) {
         console.log(`Searching for recipes with query: "${query}"`);
-        data = await recipeApi.search(query);
+        
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const apiPrefix = '/api/v1';
+        const url = `${apiBaseUrl}${apiPrefix}/search/text?query=${encodeURIComponent(query)}&limit=20`;
+        console.log(`Search URL: ${url}`);
+        
+        const response = await fetch(url);
+        console.log(`Search response status: ${response.status}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error ${response.status}: ${errorText}`);
+        }
+        
+        data = await response.json();
+        console.log(`Search successful, got ${data.length} recipes`);
       } else if (category) {
         console.log(`Fetching recipes for category slug: "${category}"`);
         
+        const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+        const apiPrefix = '/api/v1';
+        const url = `${apiBaseUrl}${apiPrefix}/search/text?query=${encodeURIComponent(category)}&limit=20`;
+        console.log(`Category search URL: ${url}`);
+        
+        const response = await fetch(url);
+        console.log(`Category search response status: ${response.status}`);
+        
+        if (!response.ok) {
+          const errorText = await response.text();
+          throw new Error(`API error ${response.status}: ${errorText}`);
+        }
+        
+        data = await response.json();
+        console.log(`Category search successful, got ${data.length} recipes`);
+      } else if (window && window.sessionStorage && window.sessionStorage.getItem('searchImage')) {
+        // Get image from session storage and perform image search
+        console.log('Performing image search');
         try {
-          // Try search endpoint with category as the query
-          data = await recipeApi.search(category);
-          console.log(`Found ${data.length} recipes for category: ${category}`);
-        } catch (categoryError) {
-          console.error('Category search error:', categoryError);
-          // Don't use fallback data, just propagate the error
-          throw categoryError;
+          // Get the image data from session storage
+          const imageData = window.sessionStorage.getItem('searchImage');
+          if (!imageData) {
+            throw new Error('No image data found in session storage');
+          }
+          console.log('Image data found in session storage, length:', imageData.length);
+          
+          // Convert base64 image data to a Blob for upload
+          const base64Response = await fetch(imageData);
+          const imageBlob = await base64Response.blob();
+          console.log('Converted image data to Blob:', imageBlob.size, 'bytes,', imageBlob.type);
+          
+          // Create a File object from the Blob
+          const imageFile = new File([imageBlob], 'search-image.jpg', { type: 'image/jpeg' });
+          console.log('Created File object:', imageFile.name, imageFile.size, 'bytes,', imageFile.type);
+          
+          // Create FormData for multipart/form-data upload
+          const formData = new FormData();
+          formData.append('image', imageFile);
+          
+          // Make the API request
+          const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
+          const apiPrefix = '/api/v1';
+          const url = `${apiBaseUrl}${apiPrefix}/search/image`;
+          console.log(`Image search URL: ${url}`);
+          
+          // Log the actual API URL from env vars for debugging
+          console.log('API base URL from env:', process.env.NEXT_PUBLIC_API_URL);
+          
+          const response = await fetch(url, {
+            method: 'POST',
+            body: formData
+          });
+          
+          console.log(`Image search response status: ${response.status}`);
+          
+          if (!response.ok) {
+            const errorText = await response.text();
+            console.error('Image search error response:', errorText);
+            throw new Error(`API error ${response.status}: ${errorText}`);
+          }
+          
+          data = await response.json();
+          console.log(`Image search successful, got ${data.length} results:`, data);
+        } catch (imageError) {
+          console.error('Image search error:', imageError);
+          throw imageError;
         }
       } else {
-        console.log(`Fetching latest ${limit} recipes`);
+        console.log(`Fetching latest recipes`);
         data = await recipeApi.getLatest(limit);
       }
       
@@ -100,69 +173,6 @@ export default function SearchResults({ query, category, categoryDisplayName, li
     }
   };
 
-  // Direct API fetch without fallbacks
-  const tryDirectFetch = async () => {
-    setLoading(true);
-    setError(null);
-    
-    try {
-      console.log('Trying direct fetch approach');
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000';
-      const apiPrefix = '/api/v1';
-      
-      let url = '';
-      
-      if (category) {
-        // Search for recipes using the category as a search term
-        url = `${apiBaseUrl}${apiPrefix}/recipes/search/?query=${encodeURIComponent(category)}&limit=${limit}`;
-      } else if (query) {
-        // If we have a search query, use the search endpoint
-        url = `${apiBaseUrl}${apiPrefix}/recipes/search/?query=${encodeURIComponent(query)}&limit=${limit}`;
-      } else {
-        // Otherwise, get latest recipes
-        url = `${apiBaseUrl}${apiPrefix}/recipes/?limit=${limit}`;
-      }
-      
-      console.log(`Direct fetch URL: ${url}`);
-      
-      const response = await fetch(url);
-      console.log(`Direct fetch response status: ${response.status}`);
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        throw new Error(`API error ${response.status}: ${errorText}`);
-      }
-      
-      const data = await response.json();
-      console.log(`Direct fetch success, got ${data.length} recipes`);
-      
-      if (data && data.length > 0) {
-        // Format recipes from direct fetch
-        const formattedRecipes = data.map((recipe: RecipeResponse) => formatRecipe(recipe));
-        setRecipes(formattedRecipes);
-      } else {
-        setRecipes([]);
-        setError('No recipes found for this category');
-      }
-    } catch (err) {
-      console.error('Direct fetch error:', err);
-      // Improved error handling to avoid [object Object]
-      let errorMessage = 'Search failed';
-      if (err instanceof Error) {
-        errorMessage += `: ${err.message}`;
-      } else if (typeof err === 'string') {
-        errorMessage += `: ${err}`;
-      } else if (err && typeof err === 'object') {
-        // Try to extract more details from the error object
-        const details = JSON.stringify(err, null, 2);
-        errorMessage += `: ${details}`;
-      }
-      setError(errorMessage);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   // Only fetch if we don't have prefetched data
   useEffect(() => {
     // Skip fetching if we have prefetched data
@@ -170,23 +180,11 @@ export default function SearchResults({ query, category, categoryDisplayName, li
       return;
     }
     
-    // Always use direct fetch for categories for more consistent results
-    if (category) {
-      tryDirectFetch();
-    } else if (query) {
-      // For explicit text queries, also use direct fetch for consistency
-      tryDirectFetch();
-    } else {
-      fetchRecipes();
-    }
+    fetchRecipes();
   }, [query, category, prefetchedRecipes]);
 
   const handleRetry = () => {
-    if (category || query) {
-      tryDirectFetch();
-    } else {
-      fetchRecipes(true);
-    }
+    fetchRecipes(true);
   };
 
   // Determine title based on search mode
@@ -248,53 +246,48 @@ export default function SearchResults({ query, category, categoryDisplayName, li
           </div>
         )}
         
-        {/* Error message */}
-        {!loading && error && (
-          <div className="text-center py-8">
-            <p className="text-red-500 mb-2">{error}</p>
-            <div className="bg-gray-100 p-4 rounded-lg max-w-lg mx-auto mb-4 text-sm text-left overflow-auto">
-              <code className="whitespace-pre-wrap">
-                Try using a different search term or category
-              </code>
+        {/* Error state */}
+        {error && !loading && !retrying && (
+          <div className="text-center py-12">
+            <div className="bg-white rounded-lg shadow-md p-8 max-w-xl mx-auto">
+              <svg className="w-16 h-16 text-red-500 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+              </svg>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">No Results Found</h3>
+              <p className="text-gray-600 mb-4">
+                We couldn't find any recipes matching your search criteria. Please try a different search term or browse our categories.
+              </p>
+              <button
+                onClick={handleRetry}
+                className="px-4 py-2 bg-amber-500 text-white rounded-md hover:bg-amber-600 focus:outline-none focus:ring-2 focus:ring-amber-500"
+              >
+                Try Again
+              </button>
             </div>
-            <button 
-              onClick={handleRetry} 
-              className="mt-2 px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600"
-            >
-              Try Again
-            </button>
           </div>
         )}
         
-        {/* Recipe grid */}
-        {!loading && recipes.length > 0 && (
+        {/* Empty results */}
+        {!loading && !error && recipes.length === 0 && (
+          <div className="text-center py-12">
+            <div className="bg-white rounded-lg shadow-md p-8 max-w-xl mx-auto">
+              <svg className="w-16 h-16 text-gray-400 mx-auto mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9.172 16.172a4 4 0 015.656 0M9 10h.01M15 10h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <h3 className="text-xl font-bold text-gray-800 mb-2">No recipes found</h3>
+              <p className="text-gray-600">
+                Try searching for a different term or browse our featured recipes below.
+              </p>
+            </div>
+          </div>
+        )}
+        
+        {/* Results grid */}
+        {!loading && !error && recipes.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-8">
             {recipes.map((recipe) => (
-              <RecipeCard
-                key={recipe.id}
-                id={recipe.id}
-                title={recipe.title}
-                image={recipe.image}
-                category={recipe.category}
-                readTime={recipe.readTime}
-                postedTime={recipe.postedTime}
-                author={recipe.author}
-                saved={false}
-              />
+              <RecipeCard key={recipe.id} recipe={recipe} />
             ))}
-          </div>
-        )}
-        
-        {/* No recipes found */}
-        {!loading && !error && recipes.length === 0 && (
-          <div className="text-center py-8">
-            <p className="text-gray-500">No recipes found for this category</p>
-            <button 
-              onClick={handleRetry}
-              className="mt-4 px-4 py-2 bg-amber-500 text-white rounded hover:bg-amber-600"
-            >
-              Try Again
-            </button>
           </div>
         )}
       </div>

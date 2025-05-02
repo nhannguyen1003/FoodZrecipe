@@ -49,10 +49,13 @@ export default function RandomRecipes() {
         setRecipes(formattedRecipes);
         setError(null);
       } else {
+        // If we received an empty array, the database might be empty
+        setRecipes([]);
         setError('No recipes found in the database');
       }
     } catch (err) {
       console.error('Error fetching recipes:', err);
+      setRecipes([]);
       setError('Failed to load recipes: ' + (err instanceof Error ? err.message : String(err)));
     } finally {
       setLoading(false);

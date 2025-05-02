@@ -34,8 +34,8 @@ def search_recipes_by_text(
     4. Return matching recipes
     """
     try:
-        # Fallback to regular text search with filtering and sorting
-        return recipe_repository.advanced_search(
+        # Use advanced search with filtering and sorting
+        results = recipe_repository.advanced_search(
             db, 
             query=query, 
             categories=categories,
@@ -43,10 +43,10 @@ def search_recipes_by_text(
             skip=offset, 
             limit=limit
         )
+        return results
     except Exception as e:
-        print(f"Text search error: {str(e)}")
-        # Return empty list instead of error
-        return []
+        # Raise the exception instead of returning empty list
+        raise HTTPException(status_code=500, detail=f"Text search failed: {str(e)}")
 
 @router.post("/image", response_model=List[RecipeResponse])
 async def search_recipes_by_image(
@@ -71,49 +71,78 @@ async def search_recipes_by_image(
     category_list = None
     if categories:
         category_list = [c.strip() for c in categories.split(',')]
-        
+    
+    print(f"Image search request: filename={image.filename}, size={image.size}, content_type={image.content_type}")
+    print(f"Search parameters: categories={category_list}, sort_by={sort_by}, limit={limit}, offset={offset}")
+    
     try:
         # Save uploaded file to temp location
         with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(image.filename)[1]) as temp_file:
             # Write content to temp file
             contents = await image.read()
+            print(f"Read image contents: {len(contents)} bytes")
             temp_file.write(contents)
             temp_file_path = temp_file.name
+            print(f"Saved image to temporary file: {temp_file_path}")
         
         try:
             # Search using recipe repository
             if not recipe_repository.image_index or recipe_repository.image_index.ntotal == 0:
                 # Cannot perform image search without index
+                print("ERROR: Image index not initialized or empty")
                 raise HTTPException(status_code=400, detail="Image search not available - no index built")
             
+            print(f"Image index initialized with {recipe_repository.image_index.ntotal} images")
+            
             # Use FAISS for image search - get more results to apply filtering
+            print(f"Performing image search on path: {temp_file_path}")
             results = recipe_repository.search_by_image_path(db, image_path=temp_file_path, k=100)
+            print(f"Image search found {len(results)} results before filtering")
             
             # Apply category filtering if specified
             if category_list and len(category_list) > 0:
+                print(f"Filtering results by categories: {category_list}")
                 filtered_results = []
                 for recipe in results:
                     if recipe.categories:
                         # Check if any category in the recipe matches any of the requested categories
                         if any(category in recipe.categories for category in category_list):
                             filtered_results.append(recipe)
+                print(f"After category filtering: {len(filtered_results)} results")
                 results = filtered_results
             
             # Apply sorting
             if sort_by == "newest":
+                print("Sorting results by newest")
                 results.sort(key=lambda x: x.created_at, reverse=True)
             elif sort_by == "popular":
+                print("Sorting results by popularity (ID)")
                 # For now, just use ID as a proxy for popularity
                 results.sort(key=lambda x: x.id, reverse=True)
             # Default is relevance, which is the order from image search
             
             # Apply pagination
-            return results[offset:offset+limit]
+            paginated_results = results[offset:offset+limit]
+            print(f"Final results after pagination: {len(paginated_results)}")
+            
+            # Log recipe IDs for debugging
+            if paginated_results:
+                result_ids = [recipe.id for recipe in paginated_results]
+                print(f"Returning recipe IDs: {result_ids}")
+            else:
+                print("No recipes found in search results")
+            
+            return paginated_results
         finally:
             # Clean up temp file
             if os.path.exists(temp_file_path):
                 os.unlink(temp_file_path)
+                print(f"Deleted temporary file: {temp_file_path}")
     except Exception as e:
+        print(f"Image search failed with error: {str(e)}")
+        if hasattr(e, '__traceback__'):
+            import traceback
+            traceback.print_tb(e.__traceback__)
         raise HTTPException(status_code=500, detail=f"Image search failed: {str(e)}")
 
 @router.post("/hybrid", response_model=List[RecipeResponse])
@@ -229,9 +258,9 @@ def search_recipes(
         )
         return results
     except Exception as e:
+        # Raise the exception instead of returning empty list
         print(f"Error in search_recipes: {str(e)}")
-        # Return empty list instead of error
-        return []
+        raise HTTPException(status_code=500, detail=f"Search failed: {str(e)}")
 
 @router.post("/multi-field", response_model=List[RecipeResponse])
 def search_recipes_multi_field(

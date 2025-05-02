@@ -11,6 +11,7 @@ export default function SearchBar() {
   const [isImageSearch, setIsImageSearch] = useState(false);
   const [previewImage, setPreviewImage] = useState<string | null>(null);
   const [isMounted, setIsMounted] = useState(false);
+  const [isLoading, setIsLoading] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   // Handle client-side hydration
@@ -21,8 +22,11 @@ export default function SearchBar() {
   const handleTextSearch = (e: React.FormEvent) => {
     e.preventDefault();
     if (searchTerm.trim()) {
-      // Use the new search route with query parameter
-      router.push(`/search?query=${encodeURIComponent(searchTerm)}`);
+      // Set loading state
+      setIsLoading(true);
+      
+      // Redirect to search page with query parameter
+      router.push(`/search-results?query=${encodeURIComponent(searchTerm.trim())}`);
     }
   };
 
@@ -54,10 +58,24 @@ export default function SearchBar() {
   };
 
   const handleImage = (file: File) => {
+    // Set loading state
+    setIsLoading(true);
+    
     const reader = new FileReader();
     reader.onload = () => {
+      // Show preview of the image
       setPreviewImage(reader.result as string);
-      setIsImageSearch(true);
+      
+      // Store the file in sessionStorage to be used by the search-results page
+      if (typeof window !== 'undefined') {
+        try {
+          console.log('Storing image data in session storage for search');
+          sessionStorage.setItem('searchImage', reader.result as string);
+        } catch (error) {
+          console.error('Failed to store image in session storage:', error);
+        }
+      }
+      
       // Navigate to results page after a short delay to show preview
       setTimeout(() => {
         router.push(`/search-results?type=image`);
@@ -113,7 +131,7 @@ export default function SearchBar() {
         <div
           className={`relative p-6 border-2 border-dashed rounded-lg transition-colors ${
             isDragging ? 'border-[#734061] bg-purple-50' : 'border-gray-300 bg-white'
-          }`}
+          } ${isLoading ? 'opacity-70' : ''}`}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
@@ -125,6 +143,7 @@ export default function SearchBar() {
             className="hidden"
             accept="image/*"
             onChange={handleImageUpload}
+            disabled={isLoading}
           />
           
           {previewImage ? (
@@ -138,6 +157,12 @@ export default function SearchBar() {
                 />
               </div>
               <p className="text-gray-600">Searching for similar recipes...</p>
+              
+              {isLoading && (
+                <div className="mt-4">
+                  <div className="w-8 h-8 border-4 border-t-[#734061] border-gray-200 rounded-full animate-spin mx-auto"></div>
+                </div>
+              )}
             </div>
           ) : (
             <div className="text-center cursor-pointer">
@@ -170,26 +195,36 @@ export default function SearchBar() {
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
             placeholder="Search for recipes, ingredients, or keywords..."
-            className="w-full py-4 px-6 pr-12 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#734061] shadow-sm bg-white text-gray-800"
+            className={`w-full py-4 px-6 pr-12 rounded-lg border border-gray-300 focus:outline-none focus:ring-2 focus:ring-[#734061] shadow-sm bg-white text-gray-800 ${
+              isLoading ? 'opacity-70' : ''
+            }`}
+            disabled={isLoading}
           />
           <button
             type="submit"
-            className="absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-[#734061]"
+            className={`absolute right-4 top-1/2 transform -translate-y-1/2 text-gray-500 hover:text-[#734061] ${
+              isLoading ? 'opacity-50 cursor-not-allowed' : ''
+            }`}
+            disabled={isLoading}
           >
-            <svg
-              xmlns="http://www.w3.org/2000/svg"
-              className="h-6 w-6"
-              fill="none"
-              viewBox="0 0 24 24"
-              stroke="currentColor"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
-              />
-            </svg>
+            {isLoading ? (
+              <div className="w-6 h-6 border-2 border-t-[#734061] border-gray-200 rounded-full animate-spin"></div>
+            ) : (
+              <svg
+                xmlns="http://www.w3.org/2000/svg"
+                className="h-6 w-6"
+                fill="none"
+                viewBox="0 0 24 24"
+                stroke="currentColor"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"
+                />
+              </svg>
+            )}
           </button>
         </form>
       )}
@@ -198,6 +233,7 @@ export default function SearchBar() {
         <button
           onClick={toggleSearchType}
           className="text-white text-sm font-medium hover:underline"
+          disabled={isLoading}
         >
           {isImageSearch ? "Switch to text search" : "Search with an image instead"}
         </button>
