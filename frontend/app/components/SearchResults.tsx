@@ -92,13 +92,29 @@ export default function SearchResults({ query, category, categoryDisplayName, li
           }
           console.log('Image data found in session storage, length:', imageData.length);
           
+          // Log the first 100 chars of the image data for debugging
+          console.log('Image data preview:', imageData.substring(0, 100) + '...');
+          
+          // Check if the image filename is encoded in the data URL
+          const filenameMatch = imageData.match(/name=([^;]+)/);
+          let filename = 'search-image.jpg'; // Default filename
+          
+          if (filenameMatch && filenameMatch[1]) {
+            try {
+              filename = decodeURIComponent(filenameMatch[1]);
+              console.log('Extracted filename from data URL:', filename);
+            } catch (e) {
+              console.error('Error decoding filename:', e);
+            }
+          }
+          
           // Convert base64 image data to a Blob for upload
           const base64Response = await fetch(imageData);
           const imageBlob = await base64Response.blob();
           console.log('Converted image data to Blob:', imageBlob.size, 'bytes,', imageBlob.type);
           
-          // Create a File object from the Blob
-          const imageFile = new File([imageBlob], 'search-image.jpg', { type: 'image/jpeg' });
+          // Create a File object from the Blob - use the extracted filename
+          const imageFile = new File([imageBlob], filename, { type: imageBlob.type || 'image/jpeg' });
           console.log('Created File object:', imageFile.name, imageFile.size, 'bytes,', imageFile.type);
           
           // Create FormData for multipart/form-data upload
@@ -114,22 +130,33 @@ export default function SearchResults({ query, category, categoryDisplayName, li
           // Log the actual API URL from env vars for debugging
           console.log('API base URL from env:', process.env.NEXT_PUBLIC_API_URL);
           
-          const response = await fetch(url, {
-            method: 'POST',
-            body: formData
-          });
-          
-          console.log(`Image search response status: ${response.status}`);
-          
-          if (!response.ok) {
-            const errorText = await response.text();
-            console.error('Image search error response:', errorText);
-            throw new Error(`API error ${response.status}: ${errorText}`);
+          // Show a detailed error if fetch fails completely
+          try {
+            const response = await fetch(url, {
+              method: 'POST',
+              body: formData
+            });
+            
+            console.log(`Image search response status: ${response.status}`);
+            
+            if (!response.ok) {
+              const errorText = await response.text();
+              console.error('Image search error response:', errorText);
+              throw new Error(`API error ${response.status}: ${errorText}`);
+            }
+            
+            data = await response.json();
+            console.log(`Image search successful, got ${data.length} results:`, data);
+            
+            // If we got zero results, log this clearly
+            if (data.length === 0) {
+              console.warn('Image search returned zero results - will display "No results found"');
+            }
+          } catch (fetchError: any) {
+            console.error('Network error during image search:', fetchError);
+            throw new Error(`Network error: ${fetchError.message}`);
           }
-          
-          data = await response.json();
-          console.log(`Image search successful, got ${data.length} results:`, data);
-        } catch (imageError) {
+        } catch (imageError: any) {
           console.error('Image search error:', imageError);
           throw imageError;
         }

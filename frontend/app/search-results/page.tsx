@@ -19,6 +19,8 @@ export default function SearchResultsPage() {
   const [searchResults, setSearchResults] = useState<any[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [debugImage, setDebugImage] = useState<string | null>(null);
+  const [debugInfo, setDebugInfo] = useState<string | null>(null);
   
   // Popular search suggestions
   const suggestions = [
@@ -34,6 +36,14 @@ export default function SearchResultsPage() {
         if (storedImage) {
           console.log('Found stored image for search');
           setSearchImage(storedImage);
+          
+          // Try to extract the original filename if present
+          const filenameMatch = storedImage.match(/name=([^;]+)/);
+          const filename = filenameMatch ? filenameMatch[1] : 'search-image.jpg';
+          
+          // Set debug info
+          setDebugInfo(`Image filename: ${filename}, Data length: ${storedImage.length} chars`);
+          setDebugImage(storedImage);
         } else {
           console.warn('No image found in session storage');
           setError('No image found for search. Please try uploading an image again.');
@@ -94,6 +104,22 @@ export default function SearchResultsPage() {
                   className="object-cover rounded-md"
                 />
               </div>
+            </div>
+          )}
+          
+          {/* DEBUG: Show more image information for debugging */}
+          {type === 'image' && debugImage && debugInfo && (
+            <div className="mt-4 p-4 bg-gray-100 rounded-lg">
+              <h3 className="text-lg font-medium mb-2">Debug Information:</h3>
+              <p className="text-sm text-gray-700 mb-2">{debugInfo}</p>
+              <details className="text-sm">
+                <summary className="cursor-pointer text-blue-600">Show Technical Details</summary>
+                <div className="mt-2 p-2 bg-gray-200 rounded text-xs overflow-auto">
+                  <code>
+                    {`Image Data Preview: ${debugImage.substring(0, 150)}...`}
+                  </code>
+                </div>
+              </details>
             </div>
           )}
         </div>

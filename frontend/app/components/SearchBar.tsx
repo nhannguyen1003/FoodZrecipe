@@ -63,14 +63,30 @@ export default function SearchBar() {
     
     const reader = new FileReader();
     reader.onload = () => {
+      // Get the original filename
+      const originalFilename = file.name;
+      console.log('Original image filename:', originalFilename);
+      
+      // Create data URL with filename in it for later extraction
+      let dataUrl = reader.result as string;
+      
+      // Add filename to the data URL for extraction later
+      if (!dataUrl.includes('name=')) {
+        // Add the filename as a parameter to the data URL
+        const filenamePart = `;name=${encodeURIComponent(originalFilename)}`;
+        dataUrl = dataUrl.replace(';base64,', `${filenamePart};base64,`);
+      }
+      
       // Show preview of the image
-      setPreviewImage(reader.result as string);
+      setPreviewImage(dataUrl);
       
       // Store the file in sessionStorage to be used by the search-results page
       if (typeof window !== 'undefined') {
         try {
           console.log('Storing image data in session storage for search');
-          sessionStorage.setItem('searchImage', reader.result as string);
+          console.log('Image data URL length:', dataUrl.length);
+          console.log('Image data URL preview:', dataUrl.substring(0, 100) + '...');
+          sessionStorage.setItem('searchImage', dataUrl);
         } catch (error) {
           console.error('Failed to store image in session storage:', error);
         }

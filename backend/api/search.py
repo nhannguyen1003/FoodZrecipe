@@ -72,12 +72,18 @@ async def search_recipes_by_image(
     if categories:
         category_list = [c.strip() for c in categories.split(',')]
     
+    # Log detailed info about the request
+    print(f"===== IMAGE SEARCH API CALL =====")
     print(f"Image search request: filename={image.filename}, size={image.size}, content_type={image.content_type}")
     print(f"Search parameters: categories={category_list}, sort_by={sort_by}, limit={limit}, offset={offset}")
     
+    # Extract the raw filename
+    image_filename = image.filename
+    print(f"Image filename: {image_filename}")
+    
     try:
-        # Save uploaded file to temp location
-        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(image.filename)[1]) as temp_file:
+        # Save uploaded file to temp location with the original filename
+        with tempfile.NamedTemporaryFile(delete=False, suffix=os.path.splitext(image.filename)[1] if image.filename else ".jpg") as temp_file:
             # Write content to temp file
             contents = await image.read()
             print(f"Read image contents: {len(contents)} bytes")
@@ -94,13 +100,13 @@ async def search_recipes_by_image(
             
             print(f"Image index initialized with {recipe_repository.image_index.ntotal} images")
             
-            # Use FAISS for image search - get more results to apply filtering
+            # Use FAISS for image search - use exact k value as requested
             print(f"Performing image search on path: {temp_file_path}")
-            results = recipe_repository.search_by_image_path(db, image_path=temp_file_path, k=100)
+            results = recipe_repository.search_by_image_path(db, image_path=temp_file_path, k=limit*2)
             print(f"Image search found {len(results)} results before filtering")
             
             # Apply category filtering if specified
-            if category_list and len(category_list) > 0:
+            if category_list and len(category_list) > 0 and results:
                 print(f"Filtering results by categories: {category_list}")
                 filtered_results = []
                 for recipe in results:
@@ -109,26 +115,35 @@ async def search_recipes_by_image(
                         if any(category in recipe.categories for category in category_list):
                             filtered_results.append(recipe)
                 print(f"After category filtering: {len(filtered_results)} results")
-                results = filtered_results
+                
+                # Only use filtered results if we found some
+                if filtered_results:
+                    results = filtered_results
+                else:
+                    print("Category filtering removed all results, using unfiltered results")
             
             # Apply sorting
-            if sort_by == "newest":
+            if sort_by == "newest" and results:
                 print("Sorting results by newest")
-                results.sort(key=lambda x: x.created_at, reverse=True)
-            elif sort_by == "popular":
+                results.sort(key=lambda x: x.created_at if x.created_at else x.id, reverse=True)
+            elif sort_by == "popular" and results:
                 print("Sorting results by popularity (ID)")
                 # For now, just use ID as a proxy for popularity
                 results.sort(key=lambda x: x.id, reverse=True)
             # Default is relevance, which is the order from image search
             
             # Apply pagination
-            paginated_results = results[offset:offset+limit]
-            print(f"Final results after pagination: {len(paginated_results)}")
+            paginated_results = results[offset:offset+limit] if offset < len(results) else []
+            print(f"Pagination: offset={offset}, limit={limit}")
+            print(f"After pagination: {len(paginated_results)} results")
             
             # Log recipe IDs for debugging
             if paginated_results:
                 result_ids = [recipe.id for recipe in paginated_results]
-                print(f"Returning recipe IDs: {result_ids}")
+                recipe_titles = [recipe.title for recipe in paginated_results]
+                print(f"Returning {len(paginated_results)} recipes")
+                print(f"Recipe IDs: {result_ids}")
+                print(f"Recipe titles: {recipe_titles}")
             else:
                 print("No recipes found in search results")
             

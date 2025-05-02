@@ -10,6 +10,7 @@ from backend.schemas.recipe import RecipeCreate, RecipeUpdate
 from database.repositories.base_repository import BaseRepository
 from config import settings
 from backend.models.category import Category
+import os
 
 class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
     def __init__(self, db: Session):
@@ -153,43 +154,79 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         """
         Generate image feature vector for a recipe and optionally update the database
         
-        This is a simplified implementation. In a real application, you'd use 
-        pretrained models like ResNet or ViT for image feature extraction.
+        Using the exact same image processing method as in lsh_utils.py
         """
-        # Import here to avoid circular imports
         from PIL import Image
         import numpy as np
         
+        print(f"Generating image feature vector for image at path: {image_path}, recipe_id={recipe_id}")
+        
         try:
-            # Load and resize image
-            img = Image.open(image_path).resize((224, 224))
-            img_array = np.array(img)
+            # This is the exact same implementation as in lsh_utils.py's process_image function
+            # Check if image file exists
+            if not os.path.exists(image_path):
+                print(f"Image file not found: {image_path}")
+                return np.zeros(self.vector_dim, dtype=np.float32)
             
-            # Simple feature extraction (average color channels)
-            # In a real application, use a proper CNN for feature extraction
-            features = np.mean(img_array, axis=(0, 1))
-            features = features / 255.0  # Normalize
+            # Load and process the image
+            print(f"Opening image file: {image_path}")
+            image = Image.open(image_path)
+            print(f"Loaded image with size: {image.size}, mode: {image.mode}")
             
-            # Pad to fixed size if needed - use vector_dim from settings
-            padded_features = np.zeros(self.vector_dim, dtype=np.float32)
-            padded_features[:len(features)] = features
+            # Convert to RGB if needed
+            if image.mode != 'RGB':
+                print(f"Converting image from {image.mode} to RGB")
+                image = image.convert('RGB')
+            
+            # Resize to standard dimensions (224x224) as used in lsh_utils.py
+            image = image.resize((224, 224))
+            print(f"Resized image to 224x224")
+            
+            # Convert to numpy array and normalize
+            img_array = np.array(image).astype(np.float32)
+            img_array /= 255.0  # Normalize to [0,1]
+            print(f"Converted to normalized numpy array: shape={img_array.shape}")
+            
+            # Flatten to 1D array for feature vector
+            feature_vector = img_array.flatten()
+            print(f"Flattened to feature vector: length={len(feature_vector)}")
+            
+            # Check vector size and pad/truncate as needed
+            if len(feature_vector) > self.vector_dim:
+                print(f"Truncating feature vector from {len(feature_vector)} to {self.vector_dim}")
+                feature_vector = feature_vector[:self.vector_dim]
+            elif len(feature_vector) < self.vector_dim:
+                print(f"Padding feature vector from {len(feature_vector)} to {self.vector_dim}")
+                padding = np.zeros(self.vector_dim - len(feature_vector), dtype=np.float32)
+                feature_vector = np.concatenate([feature_vector, padding])
+            
+            print(f"Final feature vector: shape={feature_vector.shape}, min={np.min(feature_vector)}, max={np.max(feature_vector)}, mean={np.mean(feature_vector)}")
             
             if update_db:
+                print(f"Updating database with new image feature vector for recipe_id={recipe_id}")
                 recipe = db.query(Recipe).filter(Recipe.id == recipe_id).first()
                 if recipe:
-                    recipe.image_feature_vector = padded_features.tolist()
+                    recipe.image_feature_vector = feature_vector.tolist()
                     db.commit()
+                    print(f"Updated recipe {recipe_id} with new image feature vector")
                     
                     # Update the FAISS index
                     if self.image_index:
-                        self.image_index.add(np.array([padded_features]))
+                        print(f"Updating FAISS image index with new feature vector")
+                        self.image_index.add(np.array([feature_vector]))
                         # Update the recipe ID mapping as well
                         next_idx = self.image_index.ntotal - 1
                         self.image_recipe_map[next_idx] = recipe_id
+                        print(f"Updated image_recipe_map: index={next_idx} -> recipe_id={recipe_id}")
+                    else:
+                        print("FAISS image index not initialized, skipping index update")
             
-            return padded_features
+            return feature_vector
         except Exception as e:
-            print(f"Error generating image feature vector: {e}")
+            print(f"Error generating image feature vector: {str(e)}")
+            if hasattr(e, '__traceback__'):
+                import traceback
+                traceback.print_tb(e.__traceback__)
             return np.zeros(self.vector_dim, dtype=np.float32)
     
     def update_feature_vectors(self, db: Session, *, recipe_id: int) -> None:
@@ -245,32 +282,58 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         """
         Search recipes by image feature vector using FAISS
         """
+        print(f"Searching by image vector with k={k}")
+        
         if self.image_index is None or self.image_index.ntotal == 0:
+            print("Image index is not initialized or empty")
             return []
-            
+        
+        print(f"Image index contains {self.image_index.ntotal} entries")
+        print(f"Image recipe map has {len(self.image_recipe_map)} entries")
+        
         # Make sure vector is the right shape
         query_vector = query_vector.reshape(1, -1).astype(np.float32)
+        print(f"Query vector shape: {query_vector.shape}, vector_dim={self.vector_dim}")
         
-        # Search the FAISS index
+        # Search the FAISS index - exact, no relaxed threshold
+        print("Searching FAISS index...")
         distances, indices = self.image_index.search(query_vector, k)
+        print(f"FAISS search returned {len(indices[0])} indices")
         
-        # Convert indices to recipe IDs
-        recipe_ids = [self.image_recipe_map.get(int(idx)) for idx in indices[0] if idx >= 0 and int(idx) in self.image_recipe_map]
+        # Log all indices and distances
+        for i, (idx, dist) in enumerate(zip(indices[0], distances[0])):
+            recipe_id = self.image_recipe_map.get(int(idx)) if idx >= 0 and int(idx) in self.image_recipe_map else None
+            print(f"  Result {i+1}: index={idx}, distance={dist}, recipe_id={recipe_id}")
+        
+        # Convert indices to recipe IDs - only use valid indices
+        recipe_ids = [self.image_recipe_map.get(int(idx)) for idx in indices[0] 
+                     if idx >= 0 and int(idx) in self.image_recipe_map]
+        print(f"Got {len(recipe_ids)} valid recipe IDs from index: {recipe_ids}")
+        
+        if not recipe_ids:
+            print("No valid recipe IDs found in search results")
+            return []
         
         # Fetch the recipes
         recipes = db.query(Recipe).filter(Recipe.id.in_(recipe_ids)).all()
+        print(f"Found {len(recipes)} recipes in database")
         
         # Sort recipes to match the original order from FAISS
         sorted_recipes = []
         for recipe_id in recipe_ids:
+            found = False
             for recipe in recipes:
                 if recipe.id == recipe_id:
                     # Convert array instructions to string if needed
                     if recipe.instructions and isinstance(recipe.instructions, list):
                         recipe.instructions = "\n".join(recipe.instructions)
                     sorted_recipes.append(recipe)
+                    found = True
                     break
+            if not found:
+                print(f"Warning: Recipe with ID {recipe_id} not found in database")
         
+        print(f"Returning {len(sorted_recipes)} sorted recipes")
         return sorted_recipes
     
     def search_by_text_query(self, db: Session, *, query: str, k: int = 10) -> List[Recipe]:
@@ -307,23 +370,68 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
                 
         return results
     
+    def get_all_image_names(self, db: Session) -> List[str]:
+        """
+        Get all distinct image names from recipes in the database
+        
+        Returns a sorted list of unique image names from all recipes
+        """
+        # Get all image_name values (may be null)
+        image_names = db.query(Recipe.image_name).filter(Recipe.image_name != None).distinct().all()
+        image_names = [name[0] for name in image_names if name[0]]
+        
+        # Get all Image_Name values (case sensitive column name)
+        try:
+            # Some databases might have one or the other column
+            Image_Names = db.query(Recipe.Image_Name).filter(Recipe.Image_Name != None).distinct().all()
+            Image_Names = [name[0] for name in Image_Names if name[0]]
+        except:
+            Image_Names = []
+        
+        # Combine and deduplicate
+        all_names = sorted(set(image_names + Image_Names))
+        return all_names
+
     def search_by_image_path(self, db: Session, *, image_path: str, k: int = 10) -> List[Recipe]:
         """
         Search recipes by image path
         1. Extract features from the image
         2. Use FAISS to find similar recipes
         """
+        print(f"Searching by image path: {image_path} with k={k}")
+        
+        # Get the image filename
+        image_filename = os.path.basename(image_path)
+        print(f"Image filename: {image_filename}")
+        
+        # Get all image names for debugging
+        all_image_names = self.get_all_image_names(db)
+        print(f"Database has {len(all_image_names)} unique image names. First 10: {all_image_names[:10]}")
+        
+        # Check if the filename is in the database (case insensitive)
+        image_filename_lower = image_filename.lower()
+        matches = [name for name in all_image_names if name.lower() == image_filename_lower]
+        if matches:
+            print(f"Found potential matches for {image_filename} in database: {matches}")
+        
+        # Check if the path exists
+        if not os.path.exists(image_path):
+            print(f"Error: Image path does not exist: {image_path}")
+            return []
+        
         # Generate image feature vector
         query_vector = self.generate_image_feature_vector(db, recipe_id=-1, image_path=image_path, update_db=False)
         
         # Search using the vector
         results = self.search_by_image_vector(db, query_vector=query_vector, k=k)
         
+        print(f"Image search found {len(results)} results")
+        
         # Convert array instructions to string if needed
         for recipe in results:
             if recipe.instructions and isinstance(recipe.instructions, list):
                 recipe.instructions = "\n".join(recipe.instructions)
-                
+        
         return results
     
     def hybrid_search(self, db: Session, *, text_query: str = None, image_path: str = None, k: int = 10) -> List[Recipe]:
@@ -382,50 +490,45 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         Returns:
             List of matching Recipe objects
         """
-        try:
-            # Build the base query
-            search_query = f"%{query}%"
-            base_query = db.query(Recipe).filter(
-                or_(
-                    Recipe.title.ilike(search_query),
-                    Recipe.description.ilike(search_query),
-                    func.array_to_string(Recipe.ingredients, ' ').ilike(search_query),
-                    func.array_to_string(Recipe.instructions, ' ').ilike(search_query)
-                )
+        # Build the base query
+        search_query = f"%{query}%"
+        base_query = db.query(Recipe).filter(
+            or_(
+                Recipe.title.ilike(search_query),
+                Recipe.description.ilike(search_query),
+                func.array_to_string(Recipe.ingredients, ' ').ilike(search_query),
+                func.array_to_string(Recipe.instructions, ' ').ilike(search_query)
             )
-            
-            # Apply category filtering if specified
-            if categories and len(categories) > 0:
-                # Filter recipes that have at least one matching category
-                # We convert both arrays to lowercase for case-insensitive matching
-                category_conditions = []
-                for category in categories:
-                    category_conditions.append(
-                        func.array_to_string(Recipe.categories, ',').ilike(f"%{category.lower()}%")
-                    )
-                base_query = base_query.filter(or_(*category_conditions))
-            
-            # Apply sorting
-            if sort_by == "newest":
-                base_query = base_query.order_by(desc(Recipe.created_at))
-            elif sort_by == "popular":
-                # For now, just use ID as a proxy for popularity
-                base_query = base_query.order_by(desc(Recipe.id))
-            # Default is relevance, no particular ordering
-            
-            # Apply pagination
-            recipes = base_query.offset(skip).limit(limit).all()
-            
-            # Convert array instructions to string if needed for schema compatibility
-            for recipe in recipes:
-                if recipe.instructions and isinstance(recipe.instructions, list):
-                    recipe.instructions = "\n".join(recipe.instructions)
-                    
-            return recipes
-        except Exception as e:
-            print(f"Error in advanced_search: {e}")
-            # If there's an error, return an empty list
-            return []
+        )
+        
+        # Apply category filtering if specified
+        if categories and len(categories) > 0:
+            # Filter recipes that have at least one matching category
+            # We convert both arrays to lowercase for case-insensitive matching
+            category_conditions = []
+            for category in categories:
+                category_conditions.append(
+                    func.array_to_string(Recipe.categories, ',').ilike(f"%{category.lower()}%")
+                )
+            base_query = base_query.filter(or_(*category_conditions))
+        
+        # Apply sorting
+        if sort_by == "newest":
+            base_query = base_query.order_by(desc(Recipe.created_at))
+        elif sort_by == "popular":
+            # For now, just use ID as a proxy for popularity
+            base_query = base_query.order_by(desc(Recipe.id))
+        # Default is relevance, no particular ordering
+        
+        # Apply pagination
+        recipes = base_query.offset(skip).limit(limit).all()
+        
+        # Convert array instructions to string if needed for schema compatibility
+        for recipe in recipes:
+            if recipe.instructions and isinstance(recipe.instructions, list):
+                recipe.instructions = "\n".join(recipe.instructions)
+                
+        return recipes
 
     def get_all_categories(self, db: Session) -> List[str]:
         """
@@ -433,15 +536,10 @@ class RecipeRepository(BaseRepository[Recipe, RecipeCreate, RecipeUpdate]):
         
         Returns a sorted list of unique categories from all recipes
         """
-        try:
-            # Use a direct SQL query that only fetches the categories column
-            result = db.execute(text("SELECT DISTINCT unnest(categories) as category FROM recipes WHERE categories IS NOT NULL"))
-            categories = [row[0] for row in result]
-            return sorted(categories)
-        except Exception as e:
-            print(f"Error in get_all_categories: {e}")
-            # Fallback to a simpler method if there's an error
-            return []
+        # Use a direct SQL query that only fetches the categories column
+        result = db.execute(text("SELECT DISTINCT unnest(categories) as category FROM recipes WHERE categories IS NOT NULL"))
+        categories = [row[0] for row in result]
+        return sorted(categories)
 
     def create_with_user_id(self, db: Session, obj_in: Union[Dict[str, Any], RecipeCreate], user_id: int) -> Recipe:
         """

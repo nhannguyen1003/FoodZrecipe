@@ -65,3 +65,8 @@ data/db/Food Images/
 __pycache__/
 *.py[cod]
 *$py.class
+
+# pytest cache
+.pytest_cache/
+
+backend/static/food-images/
